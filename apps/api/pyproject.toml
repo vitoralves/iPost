@@ -1,0 +1,23 @@
+[project]
+name = "ipost-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "ipost",
+    "fastapi>=0.116",
+    "python-multipart>=0.0.20",
+    "uvicorn[standard]>=0.35",
+]
+
+[project.scripts]
+ipost-api = "ipost_api.main:run"
+
+[tool.uv.sources]
+ipost = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ipost_api"]

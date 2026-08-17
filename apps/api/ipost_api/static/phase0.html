@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iPost phase 0</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #121212;
+        --fg: #f5f0e8;
+        --muted: #9a9488;
+        --line: #2a2a2a;
+        --accent: #c4a574;
+        --danger: #c45c4a;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+        background: var(--bg);
+        color: var(--fg);
+        padding: 48px 24px 80px;
+      }
+      main { max-width: 720px; margin: 0 auto; }
+      h1 { font-size: 28px; font-weight: 500; margin: 0 0 8px; }
+      p, label { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
+      section {
+        border-top: 1px solid var(--line);
+        padding: 24px 0;
+      }
+      button, a.button {
+        appearance: none;
+        border: 1px solid var(--accent);
+        background: transparent;
+        color: var(--fg);
+        padding: 10px 16px;
+        font: 14px ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+      }
+      button.primary { background: var(--accent); color: var(--bg); }
+      .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+      .status { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 14px; }
+      .ok { color: var(--accent); }
+      .bad { color: var(--danger); }
+      pre {
+        background: #1a1a1a;
+        padding: 16px;
+        overflow: auto;
+        font-size: 12px;
+        color: var(--fg);
+      }
+      input[type="text"], input[type="url"] {
+        width: 100%;
+        margin-top: 8px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        background: #1a1a1a;
+        color: var(--fg);
+        font: 14px ui-sans-serif, system-ui, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>iPost phase 0</h1>
+      <p>Connect Instagram, put a public JPEG/MP4 on Supabase, then publish a Story and a Reel. If Meta cannot fetch the URL, stop here.</p>
+
+      <section>
+        <p class="status" id="auth-status">Checking connection…</p>
+        <div class="row">
+          <a class="button primary" href="/auth/instagram">Connect Instagram</a>
+          <button type="button" id="refresh-status">Refresh status</button>
+        </div>
+      </section>
+
+      <section>
+        <p>Story: 9:16 JPEG on a public Supabase URL, then publish.</p>
+        <div class="row">
+          <button type="button" id="make-story">Create placeholder still + upload</button>
+          <button type="button" class="primary" id="publish-story">Publish Story</button>
+        </div>
+        <label>Story image URL
+          <input id="story-url" type="url" placeholder="https://….supabase.co/storage/v1/object/public/outbox/…" />
+        </label>
+      </section>
+
+      <section>
+        <p>Reel: mux still + tone into MP4, upload, then publish. Requires ffmpeg.</p>
+        <label>Caption
+          <input id="reel-caption" type="text" value="iPost phase 0" />
+        </label>
+        <div class="row">
+          <button type="button" id="make-reel">Create placeholder reel + upload</button>
+          <button type="button" class="primary" id="publish-reel">Publish Reel</button>
+        </div>
+        <label>Reel video URL
+          <input id="reel-url" type="url" placeholder="https://….supabase.co/storage/v1/object/public/outbox/…" />
+        </label>
+      </section>
+
+      <section>
+        <p>Last response</p>
+        <pre id="log">{}</pre>
+      </section>
+    </main>
+    <script>
+      const log = (value) => {
+        document.getElementById("log").textContent = JSON.stringify(value, null, 2);
+      };
+
+      const request = async (url, options) => {
+        const response = await fetch(url, options);
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          log(body);
+          throw new Error(body.detail || body.message || response.statusText);
+        }
+        log(body);
+        return body;
+      };
+
+      const loadStatus = async () => {
+        const data = await request("/auth/status");
+        const el = document.getElementById("auth-status");
+        if (data.connected) {
+          el.className = "status ok";
+          el.textContent = `Connected as @${data.username || data.user_id}. Token days left: ${data.days_until_expiry ?? "unknown"}`;
+        } else {
+          el.className = "status bad";
+          el.textContent = "Instagram is not connected.";
+        }
+      };
+
+      document.getElementById("refresh-status").onclick = () => loadStatus().catch((err) => log({ error: err.message }));
+      document.getElementById("make-story").onclick = async () => {
+        const data = await request("/phase0/placeholder-story", { method: "POST" });
+        document.getElementById("story-url").value = data.image_url;
+      };
+      document.getElementById("publish-story").onclick = async () => {
+        await request("/phase0/publish-story", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_url: document.getElementById("story-url").value }),
+        });
+      };
+      document.getElementById("make-reel").onclick = async () => {
+        const data = await request("/phase0/placeholder-reel", { method: "POST" });
+        document.getElementById("reel-url").value = data.video_url;
+      };
+      document.getElementById("publish-reel").onclick = async () => {
+        await request("/phase0/publish-reel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            video_url: document.getElementById("reel-url").value,
+            caption: document.getElementById("reel-caption").value,
+          }),
+        });
+      };
+
+      loadStatus().catch((err) => log({ error: err.message }));
+    </script>
+  </body>
+</html>
