@@ -197,12 +197,7 @@ Generation is not “call a model and hope.” It is a typed loop in `packages/i
 
 1. **Pick topic in Python.** Enabled topics only. Prefer never-used, then oldest `last_used`, then highest weight. The model does not choose the pillar. It receives one slug. That keeps the closed loop honest: weights change what ships, not what the LLM feels like today.
 2. **Planner (Bedrock Amazon Nova Pro via LiteLLM + OpenAI Agents SDK).** Structured `PlanOutput`: topic, hook, `on_image_text`, `visual_prompt`, caption (Reels only). Instructions are the Koinonia brief: voice, banned lines, what the account is and is not. Style refs are not dumped into the planner; it writes metaphor, not art direction.
-3. **Creator (same SDK, tools, same model family for text; stills are OpenAI `gpt-image-2`).** Forced tool order:
-   - `retrieve_style_refs` — only refs tagged to this topic
-   - `generate_still` — 9:16, type baked into the image
-   - `write_caption` — Reels only
-   - Logo stamp is Pillow, not a tool, and only for Stories
-   - Audio mux is ffmpeg after the still exists, not a model step
+3. **Creator (Python, not an agent).** Downloads up to four style-ref images for the picked topic from the private bucket and sends them to OpenAI `gpt-image-2` via `images.edit`. The prompt tells the model to take light and palette, not composition. Caption comes from the planner. Logo stamp is Pillow, Stories only. Reel mux is ffmpeg after the still exists.
 4. **Critic (Nova Pro).** Subscores: brand, clarity, spec, originality, safety. Overall score. Optional `must_fix`. `hard_fail` blocks publish even if the number looks fine.
 5. **If it fails** and attempts remain: planner runs again with `must_fix`, creator and critic run again. Max 3. Then `NEEDS_REVIEW`.
 

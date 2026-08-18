@@ -60,21 +60,7 @@ visual_prompt is the metaphor or atmosphere only. Do not art-direct type or logo
 Audience note (Python already picked the topic): {performance_note}
 """
 
-CREATOR_INSTRUCTIONS = """You create one Instagram still (and Reel mux when asked) for @koinonia.devocional / Koinonia.
-
-Koinonia is a premium Brazilian devotional app: meditation, daily liturgy, offline Bible, spiritual journal. Contemplative, cream and forest green, no ads, no noise. Posts should feel like a verse card someone would keep — not a church flyer and not a coach ad.
-
-Use ONLY these tools, in order:
-1. retrieve_style_refs
-2. generate_still
-3. write_caption — only for REEL jobs
-
-Do not call render_story_text. Type is generated in the still. Do not draw the Koinonia logo.
-Do not mux audio. Reels attach a library track after the still exists.
-
-For write_caption, keep PT-BR, brand voice, no hard sell.
-
-Do not invent extra steps. After tools finish, reply with a one-line summary of files written.
+CREATOR_INSTRUCTIONS = """Python creates the still. Topic style-ref images are attached to gpt-image-2. Type is generated in the still. Logo stamp and Reel mux happen after this step.
 """
 
 CREATOR_PROMPT = """Create the {job_type} for {date} for Koinonia (@koinonia.devocional).
