@@ -66,7 +66,7 @@ variable "openai_image_model_id" {
 
 variable "alert_email" {
   type    = string
-  default = "vitordgav@gmail.com"
+  default = "email@gmail.com"
 }
 
 variable "resend_api_key" {

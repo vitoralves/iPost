@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     supabase_db_region: str = "sa-east-1"
     critic_pass_score: float = 7.0
     max_attempts: int = 3
-    alert_email: str = "vitordgav@gmail.com"
+    alert_email: str = "email@gmail.com"
     resend_api_key: str = ""
     resend_from: str = "iPost <onboarding@resend.dev>"
 
