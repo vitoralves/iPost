@@ -58,6 +58,17 @@ class TimelineStep(BaseModel):
     kind: Literal["neutral", "bad", "current"] = "neutral"
 
 
+class JobInsights(BaseModel):
+    views: int = 0
+    reach: int = 0
+    saved: int = 0
+    likes: int = 0
+    comments: int = 0
+    shares: int = 0
+    replies: int = 0
+    total_interactions: int = 0
+
+
 class JobRecord(BaseModel):
     id: str
     type: JobType
@@ -80,6 +91,9 @@ class JobRecord(BaseModel):
     timeline: list[TimelineStep] = Field(default_factory=list)
     hook: str = ""
     visual_prompt: str = ""
+    ig_media_id: str | None = None
+    insights: JobInsights | None = None
+    insights_synced_at: str | None = None
 
 
 class TopicSpec(BaseModel):

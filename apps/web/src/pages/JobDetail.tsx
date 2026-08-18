@@ -22,6 +22,7 @@ export function JobDetailPage() {
     publishStory,
     rejectStory,
     skipStory,
+    refreshInsights,
   } = useStore()
   const job = jobs.find((item) => item.id === id)
 
@@ -114,6 +115,53 @@ export function JobDetailPage() {
             </>
           ) : null}
           <ScoreBars score={current.score} subscores={current.subscores} />
+          {current.status === "PUBLISHED" ? (
+            <>
+              <div className="field-label">Instagram insights</div>
+              {current.insights ? (
+                <div className="insights-grid">
+                  {(current.type === "REEL"
+                    ? [
+                        ["Views", current.insights.views],
+                        ["Reach", current.insights.reach],
+                        ["Saves", current.insights.saved],
+                        ["Likes", current.insights.likes],
+                        ["Comments", current.insights.comments],
+                        ["Shares", current.insights.shares],
+                      ]
+                    : [
+                        ["Views", current.insights.views],
+                        ["Reach", current.insights.reach],
+                        ["Replies", current.insights.replies],
+                        ["Shares", current.insights.shares],
+                      ]
+                  ).map(([label, value]) => (
+                    <div className="insights-cell" key={String(label)}>
+                      <span>{label}</span>
+                      <strong>{value}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="field-box">No insights yet. Numbers appear after Instagram has views.</p>
+              )}
+              <p className="page-sub">
+                {current.insightsSyncedAt
+                  ? `Last synced ${current.insightsSyncedAt.replace("T", " ").slice(0, 19)}`
+                  : "Not synced yet"}
+              </p>
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={busy || !current.igMediaId}
+                  onClick={() => void refreshInsights(current.id)}
+                >
+                  Refresh insights
+                </button>
+              </div>
+            </>
+          ) : null}
           <Timeline steps={current.timeline} />
           {!closed ? (
             <div className="btn-row">

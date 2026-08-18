@@ -46,7 +46,11 @@ def pick_topic(
     return ranked[0]
 
 
-def pick_audio(topic: TopicSpec, tracks: list[TrackSpec] | None = None) -> TrackSpec | None:
+def pick_audio(
+    topic: TopicSpec,
+    tracks: list[TrackSpec] | None = None,
+    plays: dict[str, float] | None = None,
+) -> TrackSpec | None:
     if tracks is None:
         from ipost.config_store import list_tracks
 
@@ -58,5 +62,13 @@ def pick_audio(topic: TopicSpec, tracks: list[TrackSpec] | None = None) -> Track
     ]
     if not candidates:
         return None
-    ranked = sorted(candidates, key=lambda item: (0 if item.last_used is None else 1, item.last_used or ""))
+    scores = plays or {}
+    ranked = sorted(
+        candidates,
+        key=lambda item: (
+            0 if item.last_used is None else 1,
+            item.last_used or "",
+            -scores.get(item.id, 0.0),
+        ),
+    )
     return ranked[0]

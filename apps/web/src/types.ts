@@ -28,6 +28,17 @@ export type TimelineStep = {
   kind: "neutral" | "bad" | "current"
 }
 
+export type JobInsights = {
+  views: number
+  reach: number
+  saved: number
+  likes: number
+  comments: number
+  shares: number
+  replies: number
+  total_interactions: number
+}
+
 export type Job = {
   id: string
   type: JobType
@@ -46,6 +57,9 @@ export type Job = {
   mustFix: string | null
   subscores: CriticSubscores
   timeline: TimelineStep[]
+  igMediaId: string | null
+  insights: JobInsights | null
+  insightsSyncedAt: string | null
 }
 
 export type Topic = {
@@ -79,6 +93,7 @@ export type AuthStatus = {
   username?: string
   days_until_expiry?: number | null
   permissions?: string[]
+  has_insights?: boolean
 }
 
 export type JobPayload = {
@@ -103,6 +118,9 @@ export type JobPayload = {
   timeline: TimelineStep[]
   hook?: string
   visual_prompt?: string
+  ig_media_id?: string | null
+  insights?: JobInsights | null
+  insights_synced_at?: string | null
 }
 
 export type StyleRef = {

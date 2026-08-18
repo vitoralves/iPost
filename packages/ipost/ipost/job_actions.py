@@ -159,6 +159,7 @@ async def publish_story_job(
         save_job(job, settings)
         notify_publish_failed(job, settings, str(exc))
         raise JobActionError(str(exc)) from exc
+    job.ig_media_id = media_id
     job.status = "PUBLISHED"
     job.must_fix = None
     now = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%H:%M")
@@ -191,6 +192,7 @@ async def publish_reel_job(
         save_job(job, settings)
         notify_publish_failed(job, settings, str(exc))
         raise JobActionError(str(exc)) from exc
+    job.ig_media_id = media_id
     job.status = "PUBLISHED"
     job.must_fix = None
     now = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%H:%M")

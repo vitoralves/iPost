@@ -15,6 +15,8 @@ from ipost.agents.templates import apply_reel_hashtags
 from ipost.agents.topic import pick_audio, pick_topic
 from ipost.config_store import list_topics
 from ipost.errors import ConfigError
+from ipost.insights import performance_note, track_play_scores
+from ipost.jobs import list_jobs
 from ipost.settings import Settings, get_settings
 
 
@@ -44,7 +46,8 @@ def _reel_audio_id(topic_slug: str, settings: Settings) -> str:
     match = next((item for item in list_topics(settings) if item.slug == topic_slug), None)
     if match is None:
         raise ConfigError("Add an enabled topic before generating.")
-    track = pick_audio(match)
+    plays = track_play_scores(list_jobs(settings))
+    track = pick_audio(match, plays=plays)
     if track is None:
         raise ConfigError("Upload and tag an audio file for this topic before generating a Reel.")
     return track.id
@@ -63,6 +66,7 @@ async def generate_job(
     topic = pick_topic(job_type=job_type).model_copy()
     if forced_topic:
         topic.slug = forced_topic
+    audience = performance_note(list_jobs(settings), day)
     job_id = f"{job_type.lower()}-{day}-{uuid4().hex[:8]}"
     work_dir = _work_dir(settings, job_id)
     job = JobRecord(
@@ -85,6 +89,7 @@ async def generate_job(
         topics=[topic.slug],
         forced_topic=topic.slug,
         must_fix=must_fix,
+        performance_note=audience,
     )
     job.topic = plan.topic
     job.hook = plan.hook
@@ -150,6 +155,7 @@ async def generate_job(
                 topics=[topic.slug],
                 forced_topic=plan.topic,
                 must_fix=must_fix,
+                performance_note=audience,
             )
             job.topic = plan.topic
             job.caption = apply_reel_hashtags(plan.caption) if job_type == "REEL" else ""

@@ -1,25 +1,49 @@
 import { refSrc } from "../api"
 import { PlusIcon, WarnIcon } from "../components/Icons"
 import { TopicPill } from "../components/Pills"
+import { daysAgoISO, formatCount } from "../lib"
 import { useStore } from "../store"
 
 export function TopicsPage() {
-  const { topics, loading, toggleTopic, addTopic } = useStore()
+  const { topics, jobs, loading, busy, toggleTopic, addTopic, syncAllInsights } = useStore()
+  const cutoff = daysAgoISO(7)
+
+  function plays7d(slug: string) {
+    return jobs
+      .filter(
+        (job) =>
+          job.type === "REEL" &&
+          job.status === "PUBLISHED" &&
+          job.topic === slug &&
+          job.date >= cutoff,
+      )
+      .reduce((sum, job) => sum + (job.insights?.views ?? job.insights?.reach ?? 0), 0)
+  }
 
   return (
     <div className="page">
       <div className="page-head">
         <h1 className="page-title">Topics</h1>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            const name = window.prompt("Topic name")
-            if (name) addTopic(name)
-          }}
-        >
-          Add topic
-        </button>
+        <div className="filters">
+          <button
+            type="button"
+            className="btn"
+            disabled={busy}
+            onClick={() => void syncAllInsights()}
+          >
+            Refresh insights
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              const name = window.prompt("Topic name")
+              if (name) addTopic(name)
+            }}
+          >
+            Add topic
+          </button>
+        </div>
       </div>
       {!loading && topics.length === 0 ? <p className="page-sub">No topics yet.</p> : null}
       <table className="table">
@@ -28,6 +52,7 @@ export function TopicsPage() {
             <th>Topic</th>
             <th>Last used</th>
             <th>Weight</th>
+            <th>7d views</th>
             <th>Audio</th>
             <th>Style refs</th>
             <th />
@@ -50,6 +75,7 @@ export function TopicsPage() {
                   {topic.weight}%
                 </div>
               </td>
+              <td>{formatCount(plays7d(topic.slug))}</td>
               <td>{topic.audio_ids.length} tracks</td>
               <td>
                 <div className="refs">

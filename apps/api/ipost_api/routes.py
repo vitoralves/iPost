@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from uuid import uuid4
 
 from ipost.instagram import (
+    INSIGHTS_SCOPE,
     InstagramError,
     authorization_url,
     exchange_code,
@@ -24,6 +25,7 @@ from ipost.config_store import (
     upsert_track,
 )
 from ipost.errors import ConfigError
+from ipost.insights import InsightsError, refresh_job_insights, sync_insights
 from ipost.job_actions import (
     JobActionError,
     attach_reel_audio,
@@ -88,6 +90,7 @@ def auth_status(settings: Settings = Depends(settings_dep)) -> dict:
         "username": token.username,
         "days_until_expiry": days_until_expiry(token),
         "permissions": token.permissions,
+        "has_insights": INSIGHTS_SCOPE in token.permissions,
     }
 
 
@@ -157,6 +160,45 @@ async def publish_job_route(
     except JobActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {**job.model_dump(), "media_id": media_id}
+
+
+@router.post("/jobs/{job_id}/insights")
+async def refresh_job_insights_route(
+    job_id: str,
+    settings: Settings = Depends(settings_dep),
+    token=Depends(require_token),
+) -> dict:
+    try:
+        job = get_job(job_id, settings)
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "PUBLISHED":
+        raise HTTPException(status_code=400, detail="Insights are available after publish")
+    try:
+        return (await refresh_job_insights(job, settings, token)).model_dump()
+    except InsightsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except InstagramError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/insights/sync")
+async def sync_insights_route(
+    settings: Settings = Depends(settings_dep),
+    token=Depends(require_token),
+) -> dict:
+    try:
+        return await sync_insights(settings, token)
+    except InsightsError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except InstagramError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/jobs/{job_id}/reject")

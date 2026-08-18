@@ -13,6 +13,11 @@ variable "scheduler_enabled" {
   default = false
 }
 
+variable "insights_scheduler_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "ipost_mock_bedrock" {
   type    = string
   default = "false"

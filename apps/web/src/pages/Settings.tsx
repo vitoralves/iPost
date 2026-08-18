@@ -5,6 +5,7 @@ import type { AuthStatus } from "../types"
 const schedule = [
   ["Story generation", "04:00"],
   ["Story publish", "06:00"],
+  ["Insights sync", "07:30"],
   ["Reel generation", "17:00"],
   ["Reel publish", "19:00"],
 ]
@@ -58,6 +59,11 @@ export function SettingsPage() {
                 ? `Token expires in ${days} days`
                 : "Connect a Professional Instagram account"}
             </div>
+            {auth?.connected && !auth.has_insights ? (
+              <div className="connected-sub">
+                Reconnect to grant insights access so topic weights can learn from Reels.
+              </div>
+            ) : null}
           </div>
           <a className="btn gold-text" href={reconnectHref}>
             {auth?.connected ? "Reconnect" : "Connect"}

@@ -24,6 +24,7 @@ async def run_planner(
     topics: list[TopicSlug],
     forced_topic: TopicSlug | None = None,
     must_fix: str | None = None,
+    performance_note: str = "(none yet)",
 ) -> PlanOutput:
     if settings.ipost_mock_bedrock:
         topic = forced_topic or topics[0]
@@ -53,6 +54,7 @@ async def run_planner(
         topics=", ".join(topics),
         forced_topic=forced_topic or "(none)",
         must_fix=must_fix or "(none)",
+        performance_note=performance_note,
     )
     with trace("iPost Planner"):
         agent = Agent(

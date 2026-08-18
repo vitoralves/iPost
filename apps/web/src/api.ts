@@ -83,6 +83,9 @@ export function toJob(row: JobPayload): Job {
     mustFix: row.must_fix,
     subscores: row.subscores ?? emptySubscores,
     timeline: row.timeline ?? [],
+    igMediaId: row.ig_media_id ?? null,
+    insights: row.insights ?? null,
+    insightsSyncedAt: row.insights_synced_at ?? null,
   }
 }
 
@@ -106,6 +109,9 @@ export function toJobPayload(job: Job): JobPayload {
     must_fix: job.mustFix,
     subscores: job.subscores,
     timeline: job.timeline,
+    ig_media_id: job.igMediaId,
+    insights: job.insights,
+    insights_synced_at: job.insightsSyncedAt,
   }
 }
 
@@ -252,4 +258,18 @@ export function rejectJob(id: string) {
 
 export function skipJob(id: string) {
   return request<JobPayload>(`/jobs/${id}/skip`, { method: "POST" }).then(toJob)
+}
+
+export function refreshJobInsights(id: string) {
+  return request<JobPayload>(`/jobs/${id}/insights`, { method: "POST" }).then(toJob)
+}
+
+export function syncInsights() {
+  return request<{
+    synced: number
+    skipped: number
+    errors: string[]
+    performance_note: string
+    weights: Record<string, number>
+  }>("/insights/sync", { method: "POST" })
 }

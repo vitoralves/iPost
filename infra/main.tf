@@ -3,6 +3,8 @@ data "aws_caller_identity" "current" {}
 locals {
   worker_ready = var.image_uri != ""
   clock_on     = var.scheduler_enabled && local.worker_ready
+  insights_on  = var.insights_scheduler_enabled && local.worker_ready
+  scheduler_on = local.clock_on || local.insights_on
 }
 
 resource "aws_ecr_repository" "worker" {
@@ -124,7 +126,7 @@ resource "aws_lambda_function" "worker" {
 }
 
 resource "aws_iam_role" "scheduler" {
-  count = local.clock_on ? 1 : 0
+  count = local.scheduler_on ? 1 : 0
   name  = "ipost-eventbridge-scheduler"
 
   assume_role_policy = jsonencode({
@@ -142,7 +144,7 @@ resource "aws_iam_role" "scheduler" {
 }
 
 resource "aws_iam_role_policy" "scheduler_invoke" {
-  count = local.clock_on ? 1 : 0
+  count = local.scheduler_on ? 1 : 0
   name  = "ipost-scheduler-invoke"
   role  = aws_iam_role.scheduler[0].id
   policy = jsonencode({
@@ -267,4 +269,32 @@ resource "aws_lambda_permission" "scheduler_reel_publish" {
   function_name = aws_lambda_function.worker[0].function_name
   principal     = "scheduler.amazonaws.com"
   source_arn    = aws_scheduler_schedule.reel_publish[0].arn
+}
+
+resource "aws_scheduler_schedule" "insights_sync" {
+  count = local.insights_on ? 1 : 0
+  name  = "ipost-insights-sync"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(30 7 * * ? *)"
+  schedule_expression_timezone = "America/Sao_Paulo"
+  state                        = "ENABLED"
+
+  target {
+    arn      = aws_lambda_function.worker[0].arn
+    role_arn = aws_iam_role.scheduler[0].arn
+    input    = jsonencode({ action = "insights" })
+  }
+}
+
+resource "aws_lambda_permission" "scheduler_insights" {
+  count         = local.insights_on ? 1 : 0
+  statement_id  = "AllowSchedulerInsights"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.worker[0].function_name
+  principal     = "scheduler.amazonaws.com"
+  source_arn    = aws_scheduler_schedule.insights_sync[0].arn
 }

@@ -7,6 +7,20 @@ export function todayISO() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIMEZONE }).format(new Date())
 }
 
+export function daysAgoISO(days: number) {
+  const [year, month, day] = todayISO().split("-").map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() - days)
+  return date.toISOString().slice(0, 10)
+}
+
+export function formatCount(value: number) {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1).replace(".0", "")}k`
+  }
+  return String(value)
+}
+
 export function headerDate() {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "long",

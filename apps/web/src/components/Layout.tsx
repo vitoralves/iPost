@@ -80,7 +80,12 @@ export function Layout() {
             <span>{TIMEZONE}</span>
             <span>{nextEventLabel()}</span>
           </div>
-          {auth?.connected && days != null ? (
+          {auth?.connected && auth.has_insights === false ? (
+            <div className="token-warn">
+              <WarnIcon />
+              Reconnect Instagram to enable insights
+            </div>
+          ) : auth?.connected && days != null ? (
             <div className="token-warn">
               <WarnIcon />
               Instagram token expires in {days} days

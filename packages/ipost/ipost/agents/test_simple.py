@@ -11,10 +11,11 @@ get_settings.cache_clear()
 
 from ipost.agents.lambda_handler import lambda_handler
 from ipost.agents.pipeline import generate_job
-from ipost.agents.schemas import TopicSpec, TrackSpec
+from ipost.agents.schemas import JobInsights, JobRecord, TopicSpec, TrackSpec
 from ipost.agents.templates import PLANNER_INSTRUCTIONS, apply_reel_hashtags
 from ipost.agents.topic import eligible_topics, pick_audio, pick_topic
 from ipost.brand import BrandKit, StyleRef, apply_brand, load_brand_kit, save_brand_kit
+from ipost.insights import apply_topic_weights, insights_from_graph, performance_note, track_play_scores
 
 
 def _assert(condition: bool, message: str) -> None:
@@ -56,6 +57,72 @@ def test_topic_rotation() -> None:
     audio = pick_audio(first, tracks)
     _assert(audio is not None and audio.id == "quiet", "tagged topic should resolve audio")
     print("topic rotation ok:", first.slug, audio.id)
+
+
+def test_insight_weights() -> None:
+    topics = [
+        TopicSpec(slug="hope", name="Hope", weight=20, enabled=True),
+        TopicSpec(slug="faith", name="Faith", weight=20, enabled=True),
+    ]
+    jobs = [
+        JobRecord(
+            id="reel-hope",
+            type="REEL",
+            slot="evening",
+            date="2026-08-17",
+            publish_at="19:00",
+            topic="hope",
+            status="PUBLISHED",
+            audio_id="quiet",
+            insights=JobInsights(views=100, reach=80),
+        ),
+        JobRecord(
+            id="reel-faith",
+            type="REEL",
+            slot="evening",
+            date="2026-08-16",
+            publish_at="19:00",
+            topic="faith",
+            status="PUBLISHED",
+            audio_id="other",
+            insights=JobInsights(views=50, reach=40),
+        ),
+        JobRecord(
+            id="story-hope",
+            type="STORY",
+            slot="morning",
+            date="2026-08-17",
+            publish_at="06:00",
+            topic="hope",
+            status="PUBLISHED",
+            insights=JobInsights(views=900, reach=900),
+        ),
+    ]
+    updated = apply_topic_weights(topics, jobs, today="2026-08-18")
+    hope = next(item for item in updated if item.slug == "hope")
+    faith = next(item for item in updated if item.slug == "faith")
+    _assert(hope.weight > faith.weight, f"{hope.weight} vs {faith.weight}")
+    _assert(10 <= hope.weight <= 40, str(hope.weight))
+    note = performance_note(jobs, today="2026-08-18")
+    _assert("Hope" in note, note)
+    plays = track_play_scores(jobs, today="2026-08-18")
+    _assert(plays["quiet"] > plays["other"], str(plays))
+    preferred = pick_audio(
+        TopicSpec(slug="hope", name="Hope", weight=20, enabled=True, audio_ids=["quiet", "other"]),
+        [
+            TrackSpec(id="quiet", title="Quiet", artist="Library", topics=["hope"], path="a.mp3", last_used="2026-08-17"),
+            TrackSpec(id="other", title="Other", artist="Library", topics=["hope"], path="b.mp3", last_used="2026-08-17"),
+        ],
+        plays=plays,
+    )
+    _assert(preferred is not None and preferred.id == "quiet", preferred.id if preferred else "none")
+    parsed = insights_from_graph(
+        [{"name": "plays", "values": [{"value": 12}]}, {"name": "reach", "values": [{"value": 9}]}],
+        {"like_count": 3},
+    )
+    _assert(parsed.views == 12, str(parsed.views))
+    _assert(parsed.likes == 3, str(parsed.likes))
+    print("insight weights ok:", hope.weight, faith.weight, note)
 
 
 def test_brand_kit_feeds_prompts() -> None:
@@ -123,6 +190,7 @@ def main() -> None:
     print("=" * 60)
     test_reel_caption_paragraphs()
     test_topic_rotation()
+    test_insight_weights()
     test_brand_kit_feeds_prompts()
     test_story_handler()
     test_reel_generate()

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { ImageOffIcon } from "../components/Icons"
-import { calendarDates, dayNum, scoreTone, todayISO } from "../lib"
+import { calendarDates, dayNum, formatCount, scoreTone, todayISO } from "../lib"
 import { useStore } from "../store"
 import type { Job, JobStatus, TopicSlug } from "../types"
 
@@ -25,7 +25,13 @@ function Thumb({ job, letter }: { job: Job | undefined; letter: string }) {
           <ImageOffIcon size={16} />
         </div>
       )}
-      {job.score > 0 ? <span className="thumb-score">{job.score.toFixed(1)}</span> : null}
+      {job.status === "PUBLISHED" && (job.insights?.views || job.insights?.reach) ? (
+        <span className="thumb-score">
+          {formatCount((job.insights?.views || job.insights?.reach) ?? 0)} views
+        </span>
+      ) : job.score > 0 ? (
+        <span className="thumb-score">{job.score.toFixed(1)}</span>
+      ) : null}
     </Link>
   )
 }

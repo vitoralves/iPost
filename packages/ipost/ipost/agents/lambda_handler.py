@@ -8,6 +8,7 @@ from ipost.agents.pipeline import generate_job, today_iso
 from ipost.agents.schemas import JobType
 from ipost.agents.canvas import StillError
 from ipost.errors import ConfigError
+from ipost.insights import InsightsError, sync_insights
 from ipost.job_actions import (
     JobActionError,
     finalize_generated_job,
@@ -70,10 +71,26 @@ async def _publish(event: dict[str, Any]) -> dict[str, Any]:
     return _response(200, {"success": True, "job": job.model_dump(), "media_id": media_id})
 
 
+async def _insights() -> dict[str, Any]:
+    settings = get_settings()
+    token = load_token(settings)
+    if token is None:
+        notify(settings, subject="iPost: insights skipped", body="Instagram is not connected.")
+        return _response(401, {"error": "Instagram is not connected"})
+    try:
+        result = await sync_insights(settings, token)
+    except InsightsError as exc:
+        notify(settings, subject="iPost: insights skipped", body=str(exc))
+        return _response(400, {"error": str(exc)})
+    return _response(200, {"success": True, **result})
+
+
 def lambda_handler(event: dict[str, Any], _context: object | None = None) -> dict[str, Any]:
     action = event.get("action", "generate")
     if action == "generate":
         return _generate(event)
     if action == "publish":
         return asyncio.run(_publish(event))
+    if action == "insights":
+        return asyncio.run(_insights())
     return _response(400, {"error": f"Unsupported action: {action}"})

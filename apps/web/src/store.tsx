@@ -15,10 +15,12 @@ import {
   getTopics,
   getTracks,
   publishJob,
+  refreshJobInsights,
   rejectJob,
   skipJob,
   saveTopic,
   saveTrack,
+  syncInsights,
   uploadTrack,
 } from "./api"
 import { todayISO } from "./lib"
@@ -64,6 +66,8 @@ type Store = {
   publishStory: (id: string) => Promise<Job | undefined>
   rejectStory: (id: string) => Promise<Job | undefined>
   skipStory: (id: string) => Promise<Job | undefined>
+  refreshInsights: (id: string) => Promise<Job | undefined>
+  syncAllInsights: () => Promise<void>
   toggleTopic: (slug: TopicSlug) => void
   addTopic: (name: string) => void
 }
@@ -230,6 +234,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       skipStory(id) {
         return run(() => skipJob(id))
+      },
+      refreshInsights(id) {
+        return run(() => refreshJobInsights(id))
+      },
+      async syncAllInsights() {
+        setBusy(true)
+        try {
+          await syncInsights()
+          const [nextJobs, nextTopics] = await Promise.all([getJobs(), getTopics()])
+          setJobs(nextJobs)
+          setTopics(nextTopics.map(toTopic))
+          setError("")
+        } catch (exc: unknown) {
+          notifyError(exc instanceof Error ? exc.message : "Could not refresh insights")
+        } finally {
+          setBusy(false)
+        }
       },
       toggleTopic(slug) {
         const current = topics.find((item) => item.slug === slug)

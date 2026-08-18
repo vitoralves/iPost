@@ -57,6 +57,7 @@ Job type: {job_type}
 If STORY: write on_image_text in Brazilian Portuguese (3–8 words, correct accents) and leave caption empty.
 If REEL: write on_image_text in Brazilian Portuguese (3–10 words, correct accents) AND a PT-BR caption in the brand voice. Separate caption sentences with a blank line. Do not put hashtags in the caption.
 visual_prompt is the metaphor or atmosphere only. Do not art-direct type or logo.
+Audience note (Python already picked the topic): {performance_note}
 """
 
 CREATOR_INSTRUCTIONS = """You create one Instagram still (and Reel mux when asked) for @koinonia.devocional / Koinonia.

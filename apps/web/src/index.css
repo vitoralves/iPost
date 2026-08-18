@@ -538,6 +538,35 @@ textarea.field-box {
   white-space: pre-wrap;
 }
 
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.insights-cell {
+  background: #1a1715;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.insights-cell span {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.insights-cell strong {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+}
+
 .audio-card {
   display: flex;
   align-items: center;

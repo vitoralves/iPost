@@ -1,6 +1,7 @@
 aws_region = "us-west-2"
 image_uri  = ""
 scheduler_enabled = false
+insights_scheduler_enabled = false
 ipost_mock_bedrock = "false"
 
 supabase_url               = "https://YOUR_PROJECT.supabase.co"

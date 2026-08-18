@@ -5,9 +5,12 @@ import httpx
 from ipost.settings import Settings
 from ipost.token_store import InstagramToken, token_from_exchange
 
+INSIGHTS_SCOPE = "instagram_business_manage_insights"
+
 AUTH_SCOPES = (
     "instagram_business_basic",
     "instagram_business_content_publish",
+    INSIGHTS_SCOPE,
 )
 
 
@@ -224,6 +227,47 @@ async def publish_story(settings: Settings, token: InstagramToken, image_url: st
     )
     await _wait_until_finished(settings, token, container_id, attempts=20, delay_seconds=2)
     return await _publish_container(settings, token, container_id)
+
+
+def token_has_insights(token: InstagramToken) -> bool:
+    if not token.permissions:
+        return True
+    return INSIGHTS_SCOPE in token.permissions
+
+
+async def get_media(settings: Settings, token: InstagramToken, media_id: str) -> dict:
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(
+            f"{settings.instagram_graph_base}/{media_id}",
+            params={
+                "fields": "id,media_type,media_product_type,like_count,comments_count",
+                "access_token": token.access_token,
+            },
+        )
+        payload = response.json()
+        _raise_for_graph(payload)
+        if response.status_code >= 400:
+            raise InstagramError("Failed to load Instagram media", payload)
+        return payload if isinstance(payload, dict) else {}
+
+
+async def get_media_insights(
+    settings: Settings,
+    token: InstagramToken,
+    media_id: str,
+    metrics: str,
+) -> list[dict]:
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(
+            f"{settings.instagram_graph_base}/{media_id}/insights",
+            params={"metric": metrics, "access_token": token.access_token},
+        )
+        payload = response.json()
+        _raise_for_graph(payload)
+        if response.status_code >= 400:
+            raise InstagramError("Failed to load Instagram insights", payload)
+        data = payload.get("data")
+        return data if isinstance(data, list) else []
 
 
 async def publish_reel(

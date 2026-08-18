@@ -21,3 +21,7 @@ output "reel_generate_schedule" {
 output "reel_publish_schedule" {
   value = try(aws_scheduler_schedule.reel_publish[0].name, "")
 }
+
+output "insights_sync_schedule" {
+  value = try(aws_scheduler_schedule.insights_sync[0].name, "")
+}
