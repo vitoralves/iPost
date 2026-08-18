@@ -1,14 +1,9 @@
-from pathlib import Path
-
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 
 from ipost.settings import get_settings
 from ipost_api.routes import router
-
-STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def create_app() -> FastAPI:
@@ -25,8 +20,8 @@ def create_app() -> FastAPI:
     app.include_router(router)
 
     @app.get("/")
-    def phase0_console() -> FileResponse:
-        return FileResponse(STATIC_DIR / "phase0.html")
+    def root() -> dict[str, str]:
+        return {"status": "ok"}
 
     @app.get("/health")
     def health() -> dict[str, str]:

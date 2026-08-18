@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     )
     openai_api_key: str = ""
     openai_image_model_id: str = "gpt-image-2"
-    ipost_mock_bedrock: bool = True
+    ipost_mock_bedrock: bool = False
     supabase_db_url: str = ""
     supabase_db_region: str = "sa-east-1"
     critic_pass_score: float = 7.0

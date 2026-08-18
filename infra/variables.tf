@@ -15,7 +15,7 @@ variable "scheduler_enabled" {
 
 variable "ipost_mock_bedrock" {
   type    = string
-  default = "true"
+  default = "false"
 }
 
 variable "supabase_url" {

@@ -1,3 +1,5 @@
+import re
+
 PLANNER_INSTRUCTIONS = """You plan one Instagram post for @koinonia.devocional, the public voice of Koinonia.
 
 Koinonia is a premium Brazilian Christian devotional app (iPhone and Android).
@@ -32,18 +34,16 @@ Topic reading — use the less obvious interpretation:
 Your job is copy and metaphor, not a full art-direction dump. The image model already has the Koinonia brief.
 
 visual_prompt:
-- One short paragraph: the strongest emotional visual metaphor for this theme
-- A human moment is welcome when it helps: from behind, at a distance, never a stock smile, never looking at camera
-- Quiet luxury, editorial photography, cinematic light, cream / forest / muted gold
+- Story: one short paragraph, the strongest emotional visual metaphor. A human moment is welcome from behind or at a distance
+- Reel: one short atmospheric note for a cream typographic frame (light, texture, a quiet object). Type is the subject
 - Do not describe typography, logos, palettes, or camera brands
 - Do not describe category labels such as HOPE or FAITH
 
 Copy rules:
 - hook is one sentence the image should make someone feel (PT-BR or a bilingual note; user-facing fields stay PT-BR)
-- on_image_text is ONE short PT-BR sentence, 3–8 words, with every accent. It should feel like a thought someone has had privately but rarely says out loud. Identification, curiosity, comfort, or the desire to share. No hashtags, no emoji, no "baixe o app", no English
-- Quality bar for on_image_text: "Ainda há esperança." / "Nem todo silêncio é ausência." / "Você não precisa entender tudo." Do not reuse those lines
-- caption is Reels only, PT-BR, under 2200 characters. Empty for Stories
-- Soft CTA if used at all: "Koinonia", "cinco minutos com Deus", "no silêncio do dia". Never "link na bio", never price, never "7 dias grátis"
+- on_image_text is ONE short PT-BR sentence with every accent. Story: 3–8 words. Reel: 3–10 words. A private thought, not a sermon. No hashtags, no emoji, no English, no "Koinonia"
+- Quality bar: "Ainda há esperança." / "Nem todo silêncio é ausência." / "Você não precisa entender tudo." Do not reuse those lines
+- caption is Reels only, PT-BR, under 2200 characters. Empty for Stories. Write 2–4 short sentences as separate paragraphs, with a blank line between each, the way Instagram captions are read. Soft invitation only: "cinco minutos com Deus", "no silêncio do dia". Never "link na bio", never price. Do not add hashtags; they are appended later.
 - If the critic sent a must-fix, honor it on this attempt
 """
 
@@ -55,8 +55,8 @@ Previous must-fix from critic (may be empty): {must_fix}
 
 Job type: {job_type}
 If STORY: write on_image_text in Brazilian Portuguese (3–8 words, correct accents) and leave caption empty.
-If REEL: leave on_image_text empty and write a PT-BR caption in the brand voice.
-visual_prompt is the metaphor only. Do not art-direct type or logo.
+If REEL: write on_image_text in Brazilian Portuguese (3–10 words, correct accents) AND a PT-BR caption in the brand voice. Separate caption sentences with a blank line. Do not put hashtags in the caption.
+visual_prompt is the metaphor or atmosphere only. Do not art-direct type or logo.
 """
 
 CREATOR_INSTRUCTIONS = """You create one Instagram still (and Reel mux when asked) for @koinonia.devocional / Koinonia.
@@ -67,9 +67,9 @@ Use ONLY these tools, in order:
 1. retrieve_style_refs
 2. generate_still
 3. write_caption — only for REEL jobs
-4. mux_reel — only for REEL jobs
 
 Do not call render_story_text. Type is generated in the still. Do not draw the Koinonia logo.
+Do not mux audio. Reels attach a library track after the still exists.
 
 For write_caption, keep PT-BR, brand voice, no hard sell.
 
@@ -98,7 +98,7 @@ Score 0–10 overall. Auto-publish bar is 7.0. hard_fail means unsafe, banned, o
 Subscores (0–10 each):
 - brand: quiet luxury + Christian spirituality + editorial photography; cream / forest / muted gold; personal not preachy; no hustle, no gold-coach luxury, no church-stock kitsch, no generic inspirational illustration, no heavenly light burst, no category label such as HOPE or FAITH
 - clarity: the planned Portuguese line is readable, accents intact, 3–8 words, not a paragraph, not gibberish, not English, not a black caption bar
-- spec: 9:16 still, no watermark, no fake UI, no invented logo. The official Koinonia app icon at the bottom center is expected and must look unaltered. The bottom fifth must have no letters
+- spec: 9:16 still, no watermark, no fake UI. STORY: official Koinonia icon at the bottom center, unaltered; bottom fifth has no letters. REEL: no logo, no app name, no username; cream editorial type is the frame, gold on one word only
 - originality: not a stock sunset, glowing cross, praying hands, or repeat of the last posts
 - safety: no politics, no other-app comparisons, no endorsements, no controversy bait, no guilt or fear, no miracle-cure or prosperity promises
 
@@ -296,3 +296,139 @@ And the combination should create curiosity.
 
 The final result should feel like something a person discovered organically on Instagram — not something a brand is trying to sell them.
 """
+
+REEL_STILL_BRIEF = """Create one vertical 9:16 Instagram Reels frame (1080×1920) for Koinonia, a premium Christian devotional brand. This is a single still, not a sequence. Do not generate multiple frames or a storyboard.
+
+The attached look notes establish the visual language. Treat them as the primary reference for the cream composition, oversized editorial serif, gold emphasis, quotation marks, and restrained spiritual aesthetic.
+
+The Reels frame should feel like a quiet thought someone needed to hear, not like an advertisement.
+
+The theme is: {theme}
+
+{theme_guidance}
+
+Atmosphere to honor:
+{visual}
+
+Visual identity (keep this the same every time):
+
+Warm cream / off-white background, approximately #F5F0E8
+Very subtle warm beige texture and soft natural gradients
+Deep forest green / almost-black typography
+Muted warm gold #C9A84C for one selected emphasis word
+Minimal gold quotation marks, thin dividers, and tiny ornamental elements when they help
+Very subtle organic shadows or botanical textures
+Elegant high-end editorial serif typography, luxury-magazine proportions
+Clean, generous negative space
+Strong typographic composition
+Soft, refined, almost tactile visual texture
+Calm cinematic lighting
+Premium Christian editorial aesthetic
+No visual clutter
+
+Text is essential
+
+This one frame MUST contain written text in Brazilian Portuguese.
+
+The text is the primary storytelling mechanism because there is no narrator.
+
+Keep it extremely concise: ONE short thought, 3–10 words. Never a paragraph. Never a second sentence.
+
+Paint this exact line, including every accent:
+
+“{phrase}”
+
+Spell every character exactly. Keep ã õ ñ ç á é í ó ú â ê ô à as written. Do not swap a tilde for an acute (amanhã, never amanhá).
+
+Do not reuse stock lines such as “Deus vê o que ninguém vê.” unless that is the exact phrase above.
+
+Typography treatment
+
+Large elegant serif as the dominant visual element.
+
+Hierarchy: emphasize ONE important word in muted gold #C9A84C; the rest in deep forest green #1B3022.
+
+Example of hierarchy only (do not copy the words unless they are the mandated phrase):
+
+Deus ainda está
+trabalhando
+em silêncio.
+
+with “trabalhando” in gold.
+
+Text should occupy a meaningful portion of the frame, never cramped.
+
+Use subtle gold quotation marks when they improve the composition.
+
+Emotional direction
+
+Intimate, hopeful, contemplative, emotionally intelligent, quietly Christian, sophisticated, and human.
+
+Speak to someone who may be anxious, tired, uncertain, struggling with faith, waiting, feeling distant from God, or trying to keep going.
+
+Never use fear, guilt, shame, or exaggerated religious promises.
+
+The viewer should think: “Isso parece que foi escrito para mim.”
+
+Visual storytelling
+
+Typography is central. Introduce subtle photographic or atmospheric elements only when they strengthen the emotion:
+
+warm sunlight
+soft shadows
+distant landscapes
+blurred botanical elements
+natural textures
+subtle human silhouettes
+light entering a dark space
+open paths
+quiet interiors
+dawn or late-afternoon light
+
+Keep these understated. Type and emotion remain dominant.
+
+Branding restriction
+
+Do NOT add the Koinonia logo.
+Do NOT write “Koinonia”.
+Do NOT write “koinonia.devocional”.
+Do NOT add the app name, username, watermark, CTA, or brand label.
+Do NOT add category labels such as HOPE or FAITH.
+Do NOT add hashtags, social-media UI, phone interface, Instagram icons, or engagement metrics.
+
+Avoid
+
+No generic church photography, praying hands, glowing crosses, cliché sunsets, overly dramatic heavenly light, stock-photo smiles, excessive religious symbolism, English text, neon, clutter, or fake AI scenery.
+{look_notes}
+{must_fix}
+
+Most important objective: stop the scroll with emotion, not with visual noise. One frame. One Portuguese thought. Same cream editorial identity every time.
+"""
+
+REEL_HASHTAGS = "#fé #deus #devocional #esperança #oração"
+
+
+def _reel_paragraphs(body: str) -> str:
+    text = body.strip()
+    if not text:
+        return ""
+    if "\n" in text:
+        parts = [part.strip() for part in text.splitlines() if part.strip()]
+        if len(parts) >= 2:
+            return "\n\n".join(parts)
+        text = parts[0] if parts else text
+    sentences = [part.strip() for part in _split_sentences(text) if part.strip()]
+    return "\n\n".join(sentences)
+
+
+def _split_sentences(text: str) -> list[str]:
+    return re.split(r"(?<=[.!?…])\s+", text)
+
+
+def apply_reel_hashtags(caption: str) -> str:
+    body = caption.replace(REEL_HASHTAGS, " ").strip()
+    body = _reel_paragraphs(body)
+    if not body:
+        return REEL_HASHTAGS
+    return f"{body}\n\n{REEL_HASHTAGS}"
+

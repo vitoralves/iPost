@@ -69,6 +69,7 @@ class JobRecord(BaseModel):
     still_path: str = ""
     still_url: str = ""
     video_path: str = ""
+    video_url: str = ""
     caption: str = ""
     audio_id: str | None = None
     score: float = 0

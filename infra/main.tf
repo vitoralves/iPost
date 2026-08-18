@@ -191,7 +191,7 @@ resource "aws_scheduler_schedule" "story_publish" {
   target {
     arn      = aws_lambda_function.worker[0].arn
     role_arn = aws_iam_role.scheduler[0].arn
-    input    = jsonencode({ action = "publish" })
+    input    = jsonencode({ action = "publish", type = "STORY" })
   }
 }
 
@@ -211,4 +211,60 @@ resource "aws_lambda_permission" "scheduler_publish" {
   function_name = aws_lambda_function.worker[0].function_name
   principal     = "scheduler.amazonaws.com"
   source_arn    = aws_scheduler_schedule.story_publish[0].arn
+}
+
+resource "aws_scheduler_schedule" "reel_generate" {
+  count = local.clock_on ? 1 : 0
+  name  = "ipost-reel-generate"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(0 17 * * ? *)"
+  schedule_expression_timezone = "America/Sao_Paulo"
+  state                        = "ENABLED"
+
+  target {
+    arn      = aws_lambda_function.worker[0].arn
+    role_arn = aws_iam_role.scheduler[0].arn
+    input    = jsonencode({ action = "generate", type = "REEL" })
+  }
+}
+
+resource "aws_scheduler_schedule" "reel_publish" {
+  count = local.clock_on ? 1 : 0
+  name  = "ipost-reel-publish"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  schedule_expression          = "cron(0 19 * * ? *)"
+  schedule_expression_timezone = "America/Sao_Paulo"
+  state                        = "ENABLED"
+
+  target {
+    arn      = aws_lambda_function.worker[0].arn
+    role_arn = aws_iam_role.scheduler[0].arn
+    input    = jsonencode({ action = "publish", type = "REEL" })
+  }
+}
+
+resource "aws_lambda_permission" "scheduler_reel_generate" {
+  count         = local.clock_on ? 1 : 0
+  statement_id  = "AllowSchedulerReelGenerate"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.worker[0].function_name
+  principal     = "scheduler.amazonaws.com"
+  source_arn    = aws_scheduler_schedule.reel_generate[0].arn
+}
+
+resource "aws_lambda_permission" "scheduler_reel_publish" {
+  count         = local.clock_on ? 1 : 0
+  statement_id  = "AllowSchedulerReelPublish"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.worker[0].function_name
+  principal     = "scheduler.amazonaws.com"
+  source_arn    = aws_scheduler_schedule.reel_publish[0].arn
 }

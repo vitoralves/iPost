@@ -6,7 +6,6 @@ from urllib.parse import quote, urlparse
 from ipost.agents.schemas import TopicSpec, TrackSpec
 from ipost.brand import BrandKit, StyleRef
 from ipost.errors import ConfigError
-from ipost.seed import SEED_BRAND, SEED_TOPICS, SEED_TRACKS
 from ipost.settings import Settings, get_settings
 from ipost.storage import StorageError, delete_private_object, supabase_client
 
@@ -105,14 +104,6 @@ def _postgres_connect(settings: Settings):
     )
 
 
-def _seed_supabase(settings: Settings) -> None:
-    save_brand_kit(SEED_BRAND, settings)
-    for topic in SEED_TOPICS:
-        upsert_topic(topic, settings)
-    for track in SEED_TRACKS:
-        upsert_track(track, settings)
-
-
 def load_brand_kit(settings: Settings | None = None) -> BrandKit:
     settings = _settings(settings)
     client = _require_client(settings)
@@ -131,8 +122,7 @@ def load_brand_kit(settings: Settings | None = None) -> BrandKit:
             raise _missing_tables() from exc
         raise ConfigError(str(exc)) from exc
     if not rows:
-        _seed_supabase(settings)
-        return load_brand_kit(settings)
+        return BrandKit()
     row = rows[0]
     return BrandKit(
         voice_tone=row["voice_tone"],
@@ -254,9 +244,6 @@ def list_topics(settings: Settings | None = None) -> list[TopicSpec]:
         if _table_missing(exc):
             raise _missing_tables() from exc
         raise ConfigError(str(exc)) from exc
-    if not rows:
-        _seed_supabase(settings)
-        return list_topics(settings)
     audio_map: dict[str, list[str]] = {}
     for link in links:
         audio_map.setdefault(link["topic_slug"], []).append(link["track_id"])
@@ -309,9 +296,6 @@ def list_tracks(settings: Settings | None = None) -> list[TrackSpec]:
         if _table_missing(exc):
             raise _missing_tables() from exc
         raise ConfigError(str(exc)) from exc
-    if not rows:
-        _seed_supabase(settings)
-        return list_tracks(settings)
     topic_map: dict[str, list[str]] = {}
     for link in links:
         topic_map.setdefault(link["track_id"], []).append(link["topic_slug"])
@@ -327,6 +311,13 @@ def list_tracks(settings: Settings | None = None) -> list[TrackSpec]:
         )
         for row in rows
     ]
+
+
+def get_track(track_id: str, settings: Settings | None = None) -> TrackSpec | None:
+    for track in list_tracks(settings):
+        if track.id == track_id:
+            return track
+    return None
 
 
 def upsert_track(track: TrackSpec, settings: Settings | None = None) -> TrackSpec:
@@ -353,6 +344,25 @@ def upsert_track(track: TrackSpec, settings: Settings | None = None) -> TrackSpe
             raise _missing_tables() from exc
         raise ConfigError(str(exc)) from exc
     return track
+
+
+def delete_track(track_id: str, settings: Settings | None = None) -> None:
+    settings = _settings(settings)
+    track = get_track(track_id, settings)
+    if track is None:
+        return
+    if track.path:
+        try:
+            delete_private_object(settings, track.path)
+        except StorageError:
+            pass
+    client = _require_client(settings)
+    try:
+        client.table("tracks").delete().eq("id", track_id).execute()
+    except Exception as exc:
+        if _table_missing(exc):
+            raise _missing_tables() from exc
+        raise ConfigError(str(exc)) from exc
 
 
 def apply_sql(settings: Settings | None = None) -> None:

@@ -39,9 +39,9 @@ async def run_planner(
         return PlanOutput(
             topic=topic,
             hook="Some days faith only has to carry you.",
-            visual_prompt="9:16 photograph of wooden boats on a still mountain lake, early light, no people, no text",
-            on_image_text="",
-            caption="Some days, faith moves mountains. Other days, it simply carries you through.",
+            visual_prompt="Warm cream field, soft late light, quiet botanical shadow at the edge",
+            on_image_text="Você não precisa vencer hoje.",
+            caption="Alguns dias a fé move montanhas. Outros, ela só te carrega.",
             avoid=["generic hustle caption", "off-brand neon"],
         )
 

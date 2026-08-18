@@ -1,23 +1,22 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
+from uuid import uuid4
 
-from ipost.fixtures import write_placeholder_still, write_tone_wav
 from ipost.instagram import (
     InstagramError,
     authorization_url,
     exchange_code,
-    publish_reel,
-    publish_story,
 )
-from ipost.mux import MuxError, mux_still_with_audio
 from ipost.agents.canvas import StillError
 from ipost.agents.pipeline import generate_job
 from ipost.agents.schemas import JobRecord, JobType, TopicSlug, TopicSpec, TrackSpec
 from ipost.brand import BrandKit, StyleRef, load_brand_kit, save_brand_kit
 from ipost.config_store import (
     delete_brand_ref,
+    delete_track,
     get_brand_ref,
+    get_track,
     list_topics,
     list_tracks,
     upsert_brand_ref,
@@ -27,34 +26,30 @@ from ipost.config_store import (
 from ipost.errors import ConfigError
 from ipost.job_actions import (
     JobActionError,
+    attach_reel_audio,
     finalize_generated_job,
     persist_incomplete_generate,
-    publish_story_job,
+    publish_media_job,
     set_terminal_status,
 )
 from ipost.jobs import get_job, list_jobs, save_job
 from ipost.notify import notify_generate_failed, notify_needs_review
 from ipost.settings import Settings
-from ipost.storage import StorageError, download_private_bytes, upload_bytes, upload_file, upload_private_bytes
+from ipost.storage import StorageError, download_private_bytes, upload_private_bytes
 from ipost.token_store import days_until_expiry, load_token, save_token
 from ipost_api.deps import require_token, settings_dep
 
 router = APIRouter()
 
 
-class PublishStoryBody(BaseModel):
-    image_url: str
-
-
-class PublishReelBody(BaseModel):
-    video_url: str
-    caption: str = "iPost phase 0"
-
-
 class GenerateBody(BaseModel):
     type: JobType = "STORY"
     date: str | None = None
     topic: TopicSlug | None = None
+
+
+class AttachAudioBody(BaseModel):
+    track_id: str
 
 
 @router.get("/auth/instagram")
@@ -96,84 +91,8 @@ def auth_status(settings: Settings = Depends(settings_dep)) -> dict:
     }
 
 
-@router.post("/phase0/placeholder-story")
-def placeholder_story(settings: Settings = Depends(settings_dep)) -> dict:
-    still = write_placeholder_still(settings.token_file.parent / "phase0-story.jpg")
-    try:
-        url = upload_file(settings, "phase0/story.jpg", still, "image/jpeg")
-    except StorageError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"image_url": url}
-
-
-@router.post("/phase0/placeholder-reel")
-def placeholder_reel(settings: Settings = Depends(settings_dep)) -> dict:
-    work = settings.token_file.parent
-    still = write_placeholder_still(work / "phase0-reel.jpg", "iPost Reel")
-    audio = write_tone_wav(work / "phase0-tone.wav")
-    video = work / "phase0-reel.mp4"
-    try:
-        mux_still_with_audio(still, audio, video)
-        url = upload_file(settings, "phase0/reel.mp4", video, "video/mp4")
-    except (MuxError, StorageError) as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"video_url": url}
-
-
-@router.post("/phase0/upload")
-async def upload_media(
-    kind: str = Form(...),
-    file: UploadFile = File(...),
-    settings: Settings = Depends(settings_dep),
-) -> dict:
-    data = await file.read()
-    if kind == "story":
-        path = "phase0/upload-story.jpg"
-        content_type = file.content_type or "image/jpeg"
-        key = "image_url"
-    elif kind == "reel":
-        path = "phase0/upload-reel.mp4"
-        content_type = file.content_type or "video/mp4"
-        key = "video_url"
-    else:
-        raise HTTPException(status_code=400, detail="kind must be story or reel")
-    try:
-        url = upload_bytes(settings, path, data, content_type)
-    except StorageError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {key: url}
-
-
-@router.post("/phase0/publish-story")
-async def publish_story_route(
-    body: PublishStoryBody,
-    settings: Settings = Depends(settings_dep),
-    token=Depends(require_token),
-) -> dict:
-    try:
-        media_id = await publish_story(settings, token, body.image_url)
-    except InstagramError as exc:
-        raise HTTPException(status_code=400, detail={"message": str(exc), "payload": exc.payload}) from exc
-    return {"media_id": media_id, "type": "STORY"}
-
-
-@router.post("/phase0/publish-reel")
-async def publish_reel_route(
-    body: PublishReelBody,
-    settings: Settings = Depends(settings_dep),
-    token=Depends(require_token),
-) -> dict:
-    try:
-        media_id = await publish_reel(settings, token, body.video_url, body.caption)
-    except InstagramError as exc:
-        raise HTTPException(status_code=400, detail={"message": str(exc), "payload": exc.payload}) from exc
-    return {"media_id": media_id, "type": "REEL"}
-
-
 @router.post("/jobs/generate")
 async def generate_route(body: GenerateBody, settings: Settings = Depends(settings_dep)) -> dict:
-    if body.type != "STORY":
-        raise HTTPException(status_code=400, detail="Only Story generate is available in Phase 1")
     job = None
     try:
         job = await generate_job(body.type, settings=settings, date=body.date, forced_topic=body.topic)
@@ -234,7 +153,7 @@ async def publish_job_route(
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     try:
-        job, media_id = await publish_story_job(job, settings, token)
+        job, media_id = await publish_media_job(job, settings, token)
     except JobActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {**job.model_dump(), "media_id": media_id}
@@ -248,6 +167,24 @@ def reject_job_route(job_id: str, settings: Settings = Depends(settings_dep)) ->
 @router.post("/jobs/{job_id}/skip")
 def skip_job_route(job_id: str, settings: Settings = Depends(settings_dep)) -> dict:
     return _set_terminal(job_id, "SKIPPED", settings)
+
+
+@router.post("/jobs/{job_id}/audio")
+def attach_audio_route(
+    job_id: str,
+    body: AttachAudioBody,
+    settings: Settings = Depends(settings_dep),
+) -> dict:
+    try:
+        job = get_job(job_id, settings)
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        return attach_reel_audio(job, body.track_id.strip(), settings).model_dump()
+    except (ConfigError, JobActionError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _set_terminal(job_id: str, status: str, settings: Settings) -> dict:
@@ -284,6 +221,48 @@ _REF_TYPES = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+
+_AUDIO_TYPES = {
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/wave": ".wav",
+    "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
+    "audio/aac": ".aac",
+    "audio/ogg": ".ogg",
+    "audio/flac": ".flac",
+}
+
+_AUDIO_SUFFIXES = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".mp4"}
+
+_AUDIO_MEDIA = {
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".mp4": "audio/mp4",
+}
+
+
+def _slug_id(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in value.strip())
+    return cleaned.strip("-_")[:40]
+
+
+def _audio_suffix(filename: str | None, content_type: str) -> str | None:
+    suffix = _AUDIO_TYPES.get(content_type)
+    if suffix:
+        return suffix
+    name = (filename or "").rsplit(".", 1)
+    if len(name) == 2:
+        ext = f".{name[1].lower()}"
+        if ext in _AUDIO_SUFFIXES:
+            return ext
+    return None
 
 
 @router.post("/brand-kit/refs")
@@ -379,3 +358,81 @@ def put_track(track_id: str, body: TrackSpec, settings: Settings = Depends(setti
         return upsert_track(body, settings).model_dump()
     except ConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.delete("/tracks/{track_id}")
+def delete_track_route(track_id: str, settings: Settings = Depends(settings_dep)) -> dict:
+    try:
+        if get_track(track_id, settings) is None:
+            raise HTTPException(status_code=404, detail="Track not found")
+        delete_track(track_id, settings)
+    except HTTPException:
+        raise
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@router.post("/tracks")
+async def upload_track_route(
+    file: UploadFile = File(...),
+    track_id: str | None = Form(default=None),
+    title: str = Form(default=""),
+    artist: str = Form(default=""),
+    topics: str = Form(default=""),
+    settings: Settings = Depends(settings_dep),
+) -> dict:
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > 40 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Audio must be 40MB or smaller")
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    suffix = _audio_suffix(file.filename, content_type)
+    if suffix is None:
+        raise HTTPException(status_code=400, detail="Use an MP3, WAV, M4A, AAC, OGG, or FLAC file")
+    ident = _slug_id(track_id or "")
+    stem = (file.filename or "track").rsplit(".", 1)[0]
+    try:
+        existing = get_track(ident, settings) if ident else None
+        if ident and existing is None:
+            raise HTTPException(status_code=404, detail="Track not found")
+        if existing is None:
+            ident = _slug_id(title or stem) or "track"
+            ident = f"{ident}-{uuid4().hex[:8]}"
+            existing = TrackSpec(
+                id=ident,
+                title=(title.strip() or stem.replace("-", " ").replace("_", " ")).strip() or "Untitled",
+                artist=(artist.strip() or "Library"),
+                topics=[item.strip() for item in topics.split(",") if item.strip()],
+            )
+        path = f"audio/{existing.id}{suffix}"
+        upload_private_bytes(settings, path, data, _AUDIO_MEDIA.get(suffix, "application/octet-stream"))
+        existing.path = path
+        if title.strip():
+            existing.title = title.strip()
+        if artist.strip():
+            existing.artist = artist.strip()
+        if topics.strip():
+            existing.topics = [item.strip() for item in topics.split(",") if item.strip()]
+        return upsert_track(existing, settings).model_dump()
+    except HTTPException:
+        raise
+    except (ConfigError, StorageError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/tracks/{track_id}/file")
+def get_track_file(track_id: str, settings: Settings = Depends(settings_dep)) -> Response:
+    try:
+        track = get_track(track_id, settings)
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if track is None or not track.path:
+        raise HTTPException(status_code=404, detail="Track file not found")
+    data = download_private_bytes(settings, track.path)
+    if not data:
+        raise HTTPException(status_code=404, detail="Track file is missing")
+    name = track.path.rsplit(".", 1)
+    ext = f".{name[1].lower()}" if len(name) == 2 else ".mp3"
+    return Response(content=data, media_type=_AUDIO_MEDIA.get(ext, "application/octet-stream"))

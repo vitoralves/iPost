@@ -21,7 +21,6 @@ export function TopicsPage() {
           Add topic
         </button>
       </div>
-      {loading ? <p className="page-sub">Loading…</p> : null}
       {!loading && topics.length === 0 ? <p className="page-sub">No topics yet.</p> : null}
       <table className="table">
         <thead>

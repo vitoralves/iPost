@@ -7,9 +7,7 @@ from agents import RunContextWrapper, function_tool
 
 from ipost.agents.canvas import generate_still
 from ipost.agents.schemas import JobType, PlanOutput
-from ipost.agents.templates import STILL_BRIEF, THEME_GUIDANCE
-from ipost.fixtures import write_tone_wav
-from ipost.mux import MuxError, mux_still_with_audio
+from ipost.agents.templates import REEL_STILL_BRIEF, STILL_BRIEF, THEME_GUIDANCE, apply_reel_hashtags
 from ipost.brand import load_brand_kit
 from ipost.overlay import burn_text
 from ipost.settings import Settings
@@ -69,7 +67,7 @@ async def generate_still_tool(wrapper: RunContextWrapper[CreatorContext], prompt
     notes = [ref.note.strip() for ref in kit.refs_for_topic(ctx.plan.topic) if ref.note.strip()]
     prompt = _still_prompt(ctx.plan, ctx.job_type, notes)
     destination = ctx.work_dir / f"{ctx.job_id}-still.jpg"
-    generate_still(ctx.settings, prompt, destination)
+    generate_still(ctx.settings, prompt, destination, stamp_logo=ctx.job_type == "STORY")
     ctx.still_path = str(destination)
     return f"Wrote still {destination}"
 
@@ -98,25 +96,6 @@ async def write_caption(wrapper: RunContextWrapper[CreatorContext], caption: str
     return f"Caption set ({len(ctx.caption)} chars)"
 
 
-@function_tool
-async def mux_reel(wrapper: RunContextWrapper[CreatorContext]) -> str:
-    ctx = wrapper.context
-    if ctx.job_type != "REEL":
-        return "Skipped mux (story)"
-    if not ctx.still_path:
-        return "No still to mux"
-    audio = ctx.work_dir / f"{ctx.job_id}-audio.wav"
-    if not audio.exists():
-        write_tone_wav(audio)
-    video = ctx.work_dir / f"{ctx.job_id}-reel.mp4"
-    try:
-        mux_still_with_audio(Path(ctx.still_path), audio, video)
-    except MuxError as exc:
-        return f"Mux failed: {exc}"
-    ctx.video_path = str(video)
-    return f"Wrote reel {video}"
-
-
 def _still_prompt(
     plan: PlanOutput,
     job_type: JobType,
@@ -135,9 +114,10 @@ def _still_prompt(
             + "\n".join(f"- {note}" for note in notes)
         )
     fix = f"\nHonor this correction: {must_fix.strip()}\n" if must_fix and must_fix.strip() else ""
-    phrase = plan.on_image_text.strip() if job_type == "STORY" else ""
+    phrase = plan.on_image_text.strip()
     visual = plan.visual_prompt.strip() or "A private human moment connected to this theme."
-    return STILL_BRIEF.format(
+    brief = REEL_STILL_BRIEF if job_type == "REEL" else STILL_BRIEF
+    return brief.format(
         theme=theme,
         theme_guidance=guidance,
         visual=visual,
@@ -159,7 +139,12 @@ def _materialize_still(
     kit = load_brand_kit(settings)
     notes = [ref.note.strip() for ref in kit.refs_for_topic(plan.topic) if ref.note.strip()]
     still = work_dir / f"{job_id}-still.jpg"
-    generate_still(settings, _still_prompt(plan, job_type, notes, must_fix), still)
+    generate_still(
+        settings,
+        _still_prompt(plan, job_type, notes, must_fix),
+        still,
+        stamp_logo=job_type == "STORY",
+    )
     return still
 
 
@@ -184,13 +169,5 @@ async def run_creator(
         work_dir=work_dir,
         must_fix=must_fix,
     )
-    video = ""
-    caption = plan.caption
-    if job_type == "REEL":
-        audio = work_dir / f"{job_id}-audio.wav"
-        if not audio.exists():
-            write_tone_wav(audio)
-        dest = work_dir / f"{job_id}-reel.mp4"
-        mux_still_with_audio(still, audio, dest)
-        video = str(dest)
-    return CreatorResult(still_path=str(still), video_path=video, caption=caption)
+    caption = apply_reel_hashtags(plan.caption) if job_type == "REEL" else ""
+    return CreatorResult(still_path=str(still), video_path="", caption=caption)

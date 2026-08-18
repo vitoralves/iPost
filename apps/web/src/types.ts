@@ -37,6 +37,7 @@ export type Job = {
   topic: TopicSlug
   status: JobStatus
   stillUrl: string
+  videoUrl: string
   caption: string
   audioId: string | null
   score: number
@@ -91,6 +92,7 @@ export type JobPayload = {
   still_path: string
   still_url?: string
   video_path?: string
+  video_url?: string
   caption: string
   audio_id: string | null
   score: number

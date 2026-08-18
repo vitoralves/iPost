@@ -11,7 +11,10 @@ from ipost.agents.creator import run_creator
 from ipost.agents.critic import run_critic
 from ipost.agents.planner import run_planner
 from ipost.agents.schemas import JobRecord, JobType, Slot, TimelineStep, TopicSlug
+from ipost.agents.templates import apply_reel_hashtags
 from ipost.agents.topic import pick_audio, pick_topic
+from ipost.config_store import list_topics
+from ipost.errors import ConfigError
 from ipost.settings import Settings, get_settings
 
 
@@ -37,6 +40,16 @@ def _work_dir(settings: Settings, job_id: str) -> Path:
     return path
 
 
+def _reel_audio_id(topic_slug: str, settings: Settings) -> str:
+    match = next((item for item in list_topics(settings) if item.slug == topic_slug), None)
+    if match is None:
+        raise ConfigError("Add an enabled topic before generating.")
+    track = pick_audio(match)
+    if track is None:
+        raise ConfigError("Upload and tag an audio file for this topic before generating a Reel.")
+    return track.id
+
+
 async def generate_job(
     job_type: JobType,
     *,
@@ -50,7 +63,6 @@ async def generate_job(
     topic = pick_topic(job_type=job_type).model_copy()
     if forced_topic:
         topic.slug = forced_topic
-    audio = pick_audio(topic) if job_type == "REEL" else None
     job_id = f"{job_type.lower()}-{day}-{uuid4().hex[:8]}"
     work_dir = _work_dir(settings, job_id)
     job = JobRecord(
@@ -61,7 +73,7 @@ async def generate_job(
         publish_at=publish_at,
         topic=topic.slug,
         status="GENERATING",
-        audio_id=audio.id if audio else None,
+        audio_id=None,
         max_attempts=settings.max_attempts,
         timeline=[TimelineStep(label="Generate", sub="start", kind="neutral")],
     )
@@ -77,7 +89,9 @@ async def generate_job(
     job.topic = plan.topic
     job.hook = plan.hook
     job.visual_prompt = plan.visual_prompt
-    job.caption = plan.caption
+    job.caption = apply_reel_hashtags(plan.caption) if job_type == "REEL" else ""
+    if job_type == "REEL":
+        job.audio_id = _reel_audio_id(plan.topic, settings)
 
     for attempt in range(1, settings.max_attempts + 1):
         job.attempt = attempt
@@ -96,7 +110,8 @@ async def generate_job(
         )
         job.still_path = artifact.still_path
         job.video_path = artifact.video_path
-        job.caption = artifact.caption or job.caption
+        if job_type == "REEL":
+            job.caption = apply_reel_hashtags(artifact.caption or job.caption)
         if not artifact.still_path or not Path(artifact.still_path).is_file():
             raise StillError("Still was not written")
         job.status = "CRITIQUE"
@@ -136,6 +151,10 @@ async def generate_job(
                 forced_topic=plan.topic,
                 must_fix=must_fix,
             )
+            job.topic = plan.topic
+            job.caption = apply_reel_hashtags(plan.caption) if job_type == "REEL" else ""
+            if job_type == "REEL":
+                job.audio_id = _reel_audio_id(plan.topic, settings)
 
     job.status = "NEEDS_REVIEW"
     job.timeline.append(

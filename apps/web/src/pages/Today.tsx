@@ -16,11 +16,15 @@ function Slot({
   meta: string
   metaClass?: string
 }) {
-  const { busy, publishStory, rejectStory, skipStory, generateStory, trackById } = useStore()
+  const { busy, publishStory, rejectStory, skipStory, generateStory, generateReel, trackById } =
+    useStore()
   const track = trackById(job.audioId)
   const isStory = job.type === "STORY"
   const review = job.status === "NEEDS_REVIEW"
   const closed = job.status === "PUBLISHED" || job.status === "SKIPPED" || job.status === "REJECTED"
+  const regenerate = () =>
+    isStory ? generateStory(job.date, job.topic) : generateReel(job.date, job.topic)
+  const canPublish = !closed && (isStory || Boolean(job.videoUrl))
 
   return (
     <article className="slot">
@@ -43,58 +47,60 @@ function Slot({
       ) : null}
       <div className="slot-actions">
         <div className={`score-lg ${scoreTone(job.score)}`}>{formatScore(job.score)}</div>
-        {isStory && !closed ? (
+        {!closed ? (
           <div className="btn-row">
-            {review ? (
-              <>
-                <button
-                  type="button"
-                  className="btn primary"
-                  disabled={busy}
-                  onClick={() => publishStory(job.id)}
-                >
-                  Approve & publish
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={busy}
-                  onClick={() => generateStory(job.date, job.topic)}
-                >
-                  Regenerate
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={busy}
-                  onClick={() => skipStory(job.id)}
-                >
-                  Skip today
-                </button>
-              </>
+            {canPublish ? (
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy}
+                onClick={() => publishStory(job.id)}
+              >
+                {review ? "Approve & publish" : "Publish"}
+              </button>
             ) : (
-              <>
-                <button
-                  type="button"
-                  className="btn primary"
-                  disabled={busy}
-                  onClick={() => publishStory(job.id)}
-                >
-                  Publish
-                </button>
-                <button
-                  type="button"
-                  className="btn danger"
-                  disabled={busy}
-                  onClick={() => rejectStory(job.id)}
-                >
-                  Reject
-                </button>
-                <Link className="btn filled" to={`/jobs/${job.id}`}>
-                  View detail
-                </Link>
-              </>
+              <Link className="btn primary" to={`/jobs/${job.id}`}>
+                Pick audio
+              </Link>
             )}
+            {review || !isStory ? (
+              <button type="button" className="btn" disabled={busy} onClick={() => regenerate()}>
+                Regenerate
+              </button>
+            ) : null}
+            {isStory && review ? (
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => skipStory(job.id)}
+              >
+                Skip today
+              </button>
+            ) : null}
+            {isStory && !review ? (
+              <button
+                type="button"
+                className="btn danger"
+                disabled={busy}
+                onClick={() => rejectStory(job.id)}
+              >
+                Reject
+              </button>
+            ) : null}
+            {!isStory ? (
+              <button
+                type="button"
+                className="btn danger"
+                disabled={busy}
+                onClick={() => rejectStory(job.id)}
+              >
+                Reject
+              </button>
+            ) : null}
+            <Link className="btn filled" to={`/jobs/${job.id}`}>
+              View detail
+            </Link>
           </div>
         ) : (
           <div className="btn-row">
@@ -115,11 +121,12 @@ function Slot({
 }
 
 export function TodayPage() {
-  const { jobs, loading, busy, generateStory } = useStore()
+  const { jobs, loading, busy, generateStory, generateReel } = useStore()
   const todayDate = todayISO()
   const story = jobs.find((item) => item.date === todayDate && item.type === "STORY")
   const reel = jobs.find((item) => item.date === todayDate && item.type === "REEL")
-  const canGenerate = !story || !story.stillUrl
+  const canGenerateStory = !story || !story.stillUrl
+  const canGenerateReel = !reel || !reel.stillUrl
 
   return (
     <div className="page">
@@ -128,19 +135,32 @@ export function TodayPage() {
           <h1 className="page-title">Today</h1>
           <p className="page-sub">{REVIEW_WINDOW}</p>
         </div>
-        {!canGenerate ? null : (
-          <button
-            type="button"
-            className="btn primary"
-            disabled={busy || loading}
-            onClick={() => generateStory(todayDate, story?.topic)}
-          >
-            {busy ? "Generating…" : story ? "Regenerate Story" : "Generate Story"}
-          </button>
-        )}
+        {canGenerateStory || canGenerateReel ? (
+          <div className="btn-row">
+            {canGenerateStory ? (
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy || loading}
+                onClick={() => generateStory(todayDate, story?.topic)}
+              >
+                {busy ? "Generating…" : story ? "Regenerate Story" : "Generate Story"}
+              </button>
+            ) : null}
+            {canGenerateReel ? (
+              <button
+                type="button"
+                className="btn"
+                disabled={busy || loading}
+                onClick={() => generateReel(todayDate, reel?.topic)}
+              >
+                {busy ? "Generating…" : reel ? "Regenerate Reel" : "Generate Reel"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      {loading ? <p className="page-sub">Loading…</p> : null}
-      {!loading && !story ? <p className="page-sub">No Story for today yet.</p> : null}
+      {!loading && !story && !reel ? <p className="page-sub">No posts for today yet.</p> : null}
       <div className="today-grid">
         {story ? (
           <Slot
@@ -153,15 +173,24 @@ export function TodayPage() {
             }
             metaClass="gold-text"
           />
-        ) : null}
+        ) : (
+          <article className="slot">
+            <div className="slot-head">
+              <div className="kicker">Morning Story</div>
+            </div>
+            <p className="page-sub">No Story for today yet.</p>
+          </article>
+        )}
         {reel ? (
           <Slot
             job={reel}
             kicker="Evening Reel"
             meta={
-              reel.status === "NEEDS_REVIEW"
-                ? "Manual action required"
-                : timeUntilLabel(reel.date, reel.publishAt)
+              reel.status === "PUBLISHED"
+                ? "Published"
+                : reel.status === "NEEDS_REVIEW"
+                  ? "Manual action required"
+                  : timeUntilLabel(reel.date, reel.publishAt)
             }
             metaClass={reel.status === "NEEDS_REVIEW" ? "red-text" : "gold-text"}
           />
@@ -170,7 +199,7 @@ export function TodayPage() {
             <div className="slot-head">
               <div className="kicker">Evening Reel</div>
             </div>
-            <p className="page-sub">Reel automation is Phase 2.</p>
+            <p className="page-sub">Generate one cream editorial still, then pick a library track.</p>
           </article>
         )}
       </div>

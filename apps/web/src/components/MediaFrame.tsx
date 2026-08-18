@@ -14,7 +14,9 @@ export function MediaFrame({ job, showNote = true }: Props) {
 
   return (
     <div className={`media ${review ? "review" : ""}`}>
-      {job.stillUrl ? (
+      {job.videoUrl ? (
+        <video src={job.videoUrl} poster={job.stillUrl || undefined} muted loop playsInline controls />
+      ) : job.stillUrl ? (
         <img src={job.stillUrl} alt="" />
       ) : (
         <div className="media-empty">

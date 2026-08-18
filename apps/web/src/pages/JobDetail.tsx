@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { Navigate, useNavigate, useParams } from "react-router-dom"
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom"
 import { MediaFrame } from "../components/MediaFrame"
 import { PlayIcon } from "../components/Icons"
 import { ScoreBars } from "../components/ScoreBars"
@@ -12,10 +12,13 @@ export function JobDetailPage() {
   const navigate = useNavigate()
   const {
     jobs,
+    tracks,
     loading,
     busy,
     trackById,
     generateStory,
+    generateReel,
+    attachAudio,
     publishStory,
     rejectStory,
     skipStory,
@@ -34,12 +37,18 @@ export function JobDetailPage() {
 
   const current = job
   const track = trackById(current.audioId)
+  const readyTracks = tracks.filter((item) => Boolean(item.path))
   const slotLabel = `${current.type} · ${current.slot}`
   const closed =
     current.status === "PUBLISHED" ||
     current.status === "SKIPPED" ||
     current.status === "REJECTED"
-  const canPublish = current.type === "STORY" && !closed
+  const isReel = current.type === "REEL"
+  const canPublish = !closed && (current.type === "STORY" || Boolean(current.videoUrl))
+  const regenerate = () =>
+    current.type === "STORY"
+      ? generateStory(current.date, current.topic)
+      : generateReel(current.date, current.topic)
 
   return (
     <div className="page">
@@ -54,37 +63,70 @@ export function JobDetailPage() {
           <div className="detail-title-row">
             <h1 className="detail-title">{title}</h1>
           </div>
-          {current.type === "REEL" ? (
+          {isReel ? (
             <>
               <div className="field-label">Caption</div>
               <p className="field-box">{current.caption || "No caption"}</p>
               <div className="field-label">Audio track</div>
               <div className="audio-card">
-                <button type="button" className="play" aria-label="Play">
+                <button type="button" className="play" aria-label="Play" disabled>
                   <PlayIcon />
                 </button>
                 <div>
                   <div>
-                    {track ? `${track.title} — ${track.artist}` : "No track"}
+                    {track ? `${track.title} — ${track.artist}` : "No track yet"}
                   </div>
                   <div className="track-meta">{track?.duration}</div>
                 </div>
                 <div className="wave" />
               </div>
+              {!closed ? (
+                <>
+                  <select
+                    className="select"
+                    value={current.audioId ?? ""}
+                    disabled={busy || readyTracks.length === 0}
+                    onChange={(event) => {
+                      const trackId = event.target.value
+                      if (trackId) void attachAudio(current.id, trackId)
+                    }}
+                  >
+                    <option value="">
+                      {readyTracks.length ? "Change library track" : "Upload audio first"}
+                    </option>
+                    {readyTracks.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title} — {item.artist}
+                      </option>
+                    ))}
+                  </select>
+                  {readyTracks.length === 0 ? (
+                    <p className="page-sub">
+                      Upload a file on the <Link to="/audio">Audio</Link> page and tag this topic.
+                    </p>
+                  ) : (
+                    <p className="page-sub">
+                      Generate picks a track tagged for this topic. Change it only to remux.
+                    </p>
+                  )}
+                </>
+              ) : null}
             </>
           ) : null}
           <ScoreBars score={current.score} subscores={current.subscores} />
           <Timeline steps={current.timeline} />
-          {canPublish ? (
+          {!closed ? (
             <div className="btn-row">
-              <button
-                type="button"
-                className="btn primary"
-                disabled={busy}
-                onClick={() => publishStory(current.id)}
-              >
-                {current.status === "NEEDS_REVIEW" ? "Approve & publish" : "Publish"}
-              </button>
+              {canPublish ? (
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={busy}
+                  onClick={() => publishStory(current.id)}
+                >
+                  {current.status === "NEEDS_REVIEW" ? "Approve & publish" : "Publish"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn"
@@ -98,7 +140,7 @@ export function JobDetailPage() {
                 className="btn"
                 disabled={busy}
                 onClick={() => {
-                  void generateStory(current.date, current.topic).then((next) => {
+                  void regenerate().then((next) => {
                     if (next) navigate(`/jobs/${next.id}`)
                   })
                 }}

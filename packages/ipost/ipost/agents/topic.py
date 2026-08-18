@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ipost.agents.schemas import TopicSlug, TopicSpec, TrackSpec
-from ipost.seed import SEED_TOPICS, SEED_TRACKS
+from ipost.errors import ConfigError
 
 
 def eligible_topics(
@@ -32,7 +32,7 @@ def pick_topic(
 ) -> TopicSpec:
     pool = eligible_topics(topics, job_type=job_type)
     if not pool:
-        raise ValueError("No eligible topics")
+        raise ConfigError("Add an enabled topic before generating.")
     ranked = sorted(
         pool,
         key=lambda item: (
@@ -51,12 +51,12 @@ def pick_audio(topic: TopicSpec, tracks: list[TrackSpec] | None = None) -> Track
         from ipost.config_store import list_tracks
 
         tracks = list_tracks()
-    candidates = [track for track in tracks if track.id in topic.audio_ids]
+    candidates = [
+        track
+        for track in tracks
+        if (track.id in topic.audio_ids or topic.slug in track.topics) and track.path
+    ]
     if not candidates:
         return None
     ranked = sorted(candidates, key=lambda item: (0 if item.last_used is None else 1, item.last_used or ""))
     return ranked[0]
-
-
-TOPICS = SEED_TOPICS
-TRACKS = SEED_TRACKS

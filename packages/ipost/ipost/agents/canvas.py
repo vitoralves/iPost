@@ -27,10 +27,18 @@ def _resize_to_story(data: bytes, destination: Path) -> Path:
     return destination
 
 
-def generate_still(settings: Settings, prompt: str, destination: Path) -> Path:
+def generate_still(
+    settings: Settings,
+    prompt: str,
+    destination: Path,
+    *,
+    stamp_logo: bool = True,
+) -> Path:
     if settings.ipost_mock_bedrock:
         write_placeholder_still(destination, prompt[:48] or "iPost")
-        return apply_logo(destination, destination)
+        if stamp_logo:
+            return apply_logo(destination, destination)
+        return destination
     if not settings.openai_api_key:
         raise StillError("OPENAI_API_KEY is required to generate stills")
 
@@ -51,4 +59,6 @@ def generate_still(settings: Settings, prompt: str, destination: Path) -> Path:
     if not raw:
         raise StillError("Image model returned an empty image")
     _resize_to_story(base64.b64decode(raw), destination)
-    return apply_logo(destination, destination)
+    if stamp_logo:
+        return apply_logo(destination, destination)
+    return destination

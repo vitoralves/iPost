@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ipost.agents.schemas import JobRecord
+from ipost.agents.schemas import JobRecord, JobType
 from ipost.errors import ConfigError
 from ipost.settings import Settings, get_settings
 from ipost.storage import StorageError, supabase_client
@@ -47,11 +47,15 @@ def get_job(job_id: str, settings: Settings | None = None) -> JobRecord | None:
     return JobRecord.model_validate(rows[0]["payload"])
 
 
-def today_story(day: str, settings: Settings | None = None) -> JobRecord | None:
+def today_job(day: str, job_type: JobType, settings: Settings | None = None) -> JobRecord | None:
     for job in list_jobs(settings):
-        if job.date == day and job.type == "STORY":
+        if job.date == day and job.type == job_type:
             return job
     return None
+
+
+def today_story(day: str, settings: Settings | None = None) -> JobRecord | None:
+    return today_job(day, "STORY", settings)
 
 
 def list_jobs(settings: Settings | None = None) -> list[JobRecord]:

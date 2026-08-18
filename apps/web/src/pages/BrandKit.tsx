@@ -17,7 +17,7 @@ function emptyRef(topic: string): StyleRef {
 }
 
 export function BrandKitPage() {
-  const { topics } = useStore()
+  const { topics, notifyError } = useStore()
   const [kit, setKit] = useState<BrandKit | null>(null)
   const [status, setStatus] = useState("")
   const [saving, setSaving] = useState(false)
@@ -36,9 +36,9 @@ export function BrandKitPage() {
       })
       .catch((exc: unknown) => {
         setKit(null)
-        setStatus(exc instanceof Error ? exc.message : "Could not load brand kit")
+        notifyError(exc instanceof Error ? exc.message : "Could not load brand kit")
       })
-  }, [])
+  }, [notifyError])
 
   function pickFile(id: string) {
     targetId.current = id
@@ -51,7 +51,7 @@ export function BrandKitPage() {
     const current = kit.refs.find((item) => item.id === id)
     const topic = current?.topic ?? ""
     if (!topic) {
-      setStatus("Pick a topic before uploading a style ref.")
+      notifyError("Pick a topic before uploading a style ref.")
       targetId.current = null
       if (fileRef.current) fileRef.current.value = ""
       return
@@ -68,7 +68,7 @@ export function BrandKitPage() {
       })
       setStatus("Image uploaded. Save to keep notes and voice.")
     } catch (exc: unknown) {
-      setStatus(exc instanceof Error ? exc.message : "Could not upload image")
+      notifyError(exc instanceof Error ? exc.message : "Could not upload image")
     } finally {
       setUploading(null)
       targetId.current = null
@@ -90,7 +90,7 @@ export function BrandKitPage() {
       await deleteBrandRef(id)
       setKit({ ...kit, refs: kit.refs.filter((item) => item.id !== id) })
     } catch (exc: unknown) {
-      setStatus(exc instanceof Error ? exc.message : "Could not remove image")
+      notifyError(exc instanceof Error ? exc.message : "Could not remove image")
     }
   }
 
@@ -98,7 +98,7 @@ export function BrandKitPage() {
     if (!kit) return
     const missing = kit.refs.filter((item) => (item.url.trim() || item.path) && !item.topic)
     if (missing.length) {
-      setStatus("Every style ref needs a topic.")
+      notifyError("Every style ref needs a topic.")
       return
     }
     setSaving(true)
@@ -111,7 +111,7 @@ export function BrandKitPage() {
       setKit(saved)
       setStatus("Saved. Next generate uses refs for that topic only.")
     } catch (exc: unknown) {
-      setStatus(exc instanceof Error ? exc.message : "Could not save brand kit")
+      notifyError(exc instanceof Error ? exc.message : "Could not save brand kit")
     } finally {
       setSaving(false)
     }

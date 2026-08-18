@@ -10,6 +10,35 @@ const emptySubscores = {
   safety: 0,
 }
 
+const REEL_HASHTAGS = "#fé #deus #devocional #esperança #oração"
+
+function splitCaptionSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?…])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+export function formatReelCaption(caption: string): string {
+  const stripped = caption.replaceAll(REEL_HASHTAGS, " ").trim()
+  if (!stripped) {
+    return REEL_HASHTAGS
+  }
+  let parts: string[]
+  if (stripped.includes("\n")) {
+    parts = stripped
+      .split(/\n+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+    if (parts.length < 2) {
+      parts = splitCaptionSentences(parts[0] ?? stripped)
+    }
+  } else {
+    parts = splitCaptionSentences(stripped)
+  }
+  return `${parts.join("\n\n")}\n\n${REEL_HASHTAGS}`
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${base}${path}`, {
     ...init,
@@ -45,7 +74,8 @@ export function toJob(row: JobPayload): Job {
     topic: row.topic,
     status: row.status,
     stillUrl: row.still_url || (row.still_path.startsWith("http") ? row.still_path : ""),
-    caption: row.caption,
+    videoUrl: row.video_url || (row.video_path?.startsWith("http") ? row.video_path : "") || "",
+    caption: row.type === "REEL" && row.caption ? formatReelCaption(row.caption) : row.caption,
     audioId: row.audio_id,
     score: row.score,
     attempt: row.attempt,
@@ -67,6 +97,7 @@ export function toJobPayload(job: Job): JobPayload {
     status: job.status,
     still_path: job.stillUrl,
     still_url: job.stillUrl,
+    video_url: job.videoUrl,
     caption: job.caption,
     audio_id: job.audioId,
     score: job.score,
@@ -153,6 +184,38 @@ export function saveTrack(track: Track) {
   })
 }
 
+export function deleteTrack(id: string) {
+  return request<{ ok: boolean }>(`/tracks/${id}`, { method: "DELETE" })
+}
+
+export function trackFileUrl(id: string) {
+  return `${base}/tracks/${id}/file`
+}
+
+export async function uploadTrack(file: File, trackId?: string, title?: string, artist?: string) {
+  const body = new FormData()
+  body.append("file", file)
+  if (trackId) body.append("track_id", trackId)
+  if (title) body.append("title", title)
+  if (artist) body.append("artist", artist)
+  const response = await fetch(`${base}/tracks`, { method: "POST", body })
+  if (!response.ok) {
+    const detail = await response.text()
+    try {
+      const payload = JSON.parse(detail) as { detail?: unknown }
+      if (typeof payload.detail === "string") {
+        throw new Error(payload.detail)
+      }
+    } catch (exc) {
+      if (exc instanceof Error && exc.message !== detail) {
+        throw exc
+      }
+    }
+    throw new Error(detail || `API ${response.status}`)
+  }
+  return (await response.json()) as Track
+}
+
 export async function getJobs() {
   const payload = await request<{ jobs: JobPayload[] }>("/jobs")
   return payload.jobs.map(toJob)
@@ -169,6 +232,13 @@ export function generateJob(type: Job["type"] = "STORY", date?: string, topic?: 
   return request<JobPayload>("/jobs/generate", {
     method: "POST",
     body: JSON.stringify({ type, date, topic }),
+  }).then(toJob)
+}
+
+export function attachJobAudio(id: string, trackId: string) {
+  return request<JobPayload>(`/jobs/${id}/audio`, {
+    method: "POST",
+    body: JSON.stringify({ track_id: trackId }),
   }).then(toJob)
 }
 

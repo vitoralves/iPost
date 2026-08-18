@@ -4,7 +4,9 @@ import { getAuthStatus } from "../api"
 import { headerDate, nextEventLabel, TIMEZONE } from "../lib"
 import { useStore } from "../store"
 import type { AuthStatus } from "../types"
+import { ErrorToast } from "./ErrorToast"
 import { ChevronLeft, WarnIcon } from "./Icons"
+import { SpinnerOverlay } from "./SpinnerOverlay"
 
 const links = [
   { to: "/", label: "Today" },
@@ -18,7 +20,7 @@ const links = [
 export function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { error } = useStore()
+  const { error, errorSeq, clearError, loading, busy } = useStore()
   const isDetail = location.pathname.startsWith("/jobs/")
   const [auth, setAuth] = useState<AuthStatus | null>(null)
 
@@ -85,8 +87,9 @@ export function Layout() {
             </div>
           ) : null}
         </header>
-        {error ? <p className="page-sub">{error}</p> : null}
         <Outlet />
+        <SpinnerOverlay show={loading || busy} />
+        <ErrorToast message={error} seq={errorSeq} onDismiss={clearError} />
       </div>
     </div>
   )

@@ -42,7 +42,7 @@ function SlotLabel({ job, letter }: { job: Job | undefined; letter: string }) {
 }
 
 export function CalendarPage() {
-  const { jobs, topics, loading } = useStore()
+  const { jobs, topics } = useStore()
   const [status, setStatus] = useState<"all" | JobStatus>("all")
   const [topic, setTopic] = useState<"all" | TopicSlug>("all")
   const dates = calendarDates()
@@ -86,7 +86,6 @@ export function CalendarPage() {
           </select>
         </div>
       </div>
-      {loading ? <p className="page-sub">Loading…</p> : null}
       <div className="cal">
         {weekdays.map((day) => (
           <div className="cal-h" key={day}>
