@@ -1,20 +1,31 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import { Layout } from "./components/Layout"
+import { RequireAuth } from "./components/RequireAuth"
 import { AudioPage } from "./pages/Audio"
 import { BrandKitPage } from "./pages/BrandKit"
 import { CalendarPage } from "./pages/Calendar"
 import { JobDetailPage } from "./pages/JobDetail"
+import { LoginPage } from "./pages/Login"
 import { SettingsPage } from "./pages/Settings"
 import { TodayPage } from "./pages/Today"
 import { TopicsPage } from "./pages/Topics"
 import { StoreProvider } from "./store"
 
-export default function App() {
+function AuthedLayout() {
   return (
     <StoreProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route element={<Layout />}>
+      <Layout />
+    </StoreProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<RequireAuth />}>
+          <Route element={<AuthedLayout />}>
             <Route path="/" element={<TodayPage />} />
             <Route path="/jobs/:id" element={<JobDetailPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
@@ -24,8 +35,8 @@ export default function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-        </Routes>
-      </BrowserRouter>
-    </StoreProvider>
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }

@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     alert_email: str = "email@gmail.com"
     resend_api_key: str = ""
     resend_from: str = "iPost <onboarding@resend.dev>"
+    session_secret: str = ""
+    session_secure: bool = False
 
     @property
     def token_file(self) -> Path:

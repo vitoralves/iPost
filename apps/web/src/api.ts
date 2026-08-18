@@ -39,27 +39,41 @@ export function formatReelCaption(caption: string): string {
   return `${parts.join("\n\n")}\n\n${REEL_HASHTAGS}`
 }
 
+function redirectToLogin() {
+  if (!window.location.pathname.startsWith("/login")) {
+    window.location.assign("/login")
+  }
+}
+
+async function readError(response: Response) {
+  if (response.status === 401) {
+    redirectToLogin()
+  }
+  const detail = await response.text()
+  try {
+    const payload = JSON.parse(detail) as { detail?: unknown }
+    if (typeof payload.detail === "string") {
+      throw new Error(payload.detail)
+    }
+  } catch (exc) {
+    if (exc instanceof Error && exc.message !== detail) {
+      throw exc
+    }
+  }
+  throw new Error(detail || `API ${response.status}`)
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${base}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
   })
   if (!response.ok) {
-    const detail = await response.text()
-    try {
-      const payload = JSON.parse(detail) as { detail?: unknown }
-      if (typeof payload.detail === "string") {
-        throw new Error(payload.detail)
-      }
-    } catch (exc) {
-      if (exc instanceof Error && exc.message !== detail) {
-        throw exc
-      }
-    }
-    throw new Error(detail || `API ${response.status}`)
+    throw await readError(response)
   }
   return (await response.json()) as T
 }
@@ -119,6 +133,21 @@ export function getAuthStatus() {
   return request<AuthStatus>("/auth/status")
 }
 
+export function getSession() {
+  return request<{ username: string }>("/auth/me")
+}
+
+export function login(username: string, password: string) {
+  return request<{ username: string }>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  })
+}
+
+export function logout() {
+  return request<{ ok: boolean }>("/auth/logout", { method: "POST" })
+}
+
 export function getBrandKit() {
   return request<BrandKit>("/brand-kit")
 }
@@ -165,20 +194,13 @@ export async function uploadBrandRef(file: File, id: string, note: string, topic
   body.append("ref_id", id)
   body.append("note", note)
   body.append("topic", topic)
-  const response = await fetch(`${base}/brand-kit/refs`, { method: "POST", body })
+  const response = await fetch(`${base}/brand-kit/refs`, {
+    method: "POST",
+    body,
+    credentials: "include",
+  })
   if (!response.ok) {
-    const detail = await response.text()
-    try {
-      const payload = JSON.parse(detail) as { detail?: unknown }
-      if (typeof payload.detail === "string") {
-        throw new Error(payload.detail)
-      }
-    } catch (exc) {
-      if (exc instanceof Error && exc.message !== detail) {
-        throw exc
-      }
-    }
-    throw new Error(detail || `API ${response.status}`)
+    throw await readError(response)
   }
   return (await response.json()) as StyleRef
 }
@@ -225,20 +247,13 @@ export async function uploadTrack(file: File, trackId?: string, title?: string, 
   if (trackId) body.append("track_id", trackId)
   if (title) body.append("title", title)
   if (artist) body.append("artist", artist)
-  const response = await fetch(`${base}/tracks`, { method: "POST", body })
+  const response = await fetch(`${base}/tracks`, {
+    method: "POST",
+    body,
+    credentials: "include",
+  })
   if (!response.ok) {
-    const detail = await response.text()
-    try {
-      const payload = JSON.parse(detail) as { detail?: unknown }
-      if (typeof payload.detail === "string") {
-        throw new Error(payload.detail)
-      }
-    } catch (exc) {
-      if (exc instanceof Error && exc.message !== detail) {
-        throw exc
-      }
-    }
-    throw new Error(detail || `API ${response.status}`)
+    throw await readError(response)
   }
   return (await response.json()) as Track
 }

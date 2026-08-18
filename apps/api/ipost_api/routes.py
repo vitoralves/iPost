@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from uuid import uuid4
 
@@ -12,6 +12,7 @@ from ipost.instagram import (
 from ipost.agents.canvas import StillError
 from ipost.agents.pipeline import generate_job
 from ipost.agents.schemas import JobRecord, JobType, TopicSlug, TopicSpec, TrackSpec
+from ipost.auth import SESSION_COOKIE, authenticate, cookie_params, sign_session
 from ipost.brand import BrandKit, StyleRef, load_brand_kit, save_brand_kit
 from ipost.config_store import (
     delete_brand_ref,
@@ -40,9 +41,15 @@ from ipost.notify import notify_generate_failed, notify_needs_review
 from ipost.settings import Settings
 from ipost.storage import StorageError, download_private_bytes, upload_private_bytes
 from ipost.token_store import days_until_expiry, load_token, save_token
-from ipost_api.deps import require_token, settings_dep
+from ipost_api.deps import require_admin, require_token, settings_dep
 
+public_router = APIRouter()
 router = APIRouter()
+
+
+class LoginBody(BaseModel):
+    username: str
+    password: str
 
 
 class GenerateBody(BaseModel):
@@ -62,7 +69,41 @@ def start_instagram_login(settings: Settings = Depends(settings_dep)) -> Redirec
     return RedirectResponse(authorization_url(settings))
 
 
-@router.get("/auth/instagram/callback")
+@public_router.post("/auth/login")
+def login(body: LoginBody, settings: Settings = Depends(settings_dep)) -> JSONResponse:
+    if not settings.session_secret:
+        raise HTTPException(status_code=503, detail="SESSION_SECRET is missing")
+    try:
+        username = authenticate(body.username, body.password, settings)
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if username is None:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    response = JSONResponse({"username": username})
+    response.set_cookie(value=sign_session(username, settings.session_secret), **cookie_params(settings))
+    return response
+
+
+@public_router.post("/auth/logout")
+def logout(settings: Settings = Depends(settings_dep)) -> JSONResponse:
+    response = JSONResponse({"ok": True})
+    params = cookie_params(settings)
+    response.delete_cookie(
+        SESSION_COOKIE,
+        path=params["path"],
+        secure=params["secure"],
+        httponly=True,
+        samesite=params["samesite"],
+    )
+    return response
+
+
+@router.get("/auth/me")
+def auth_me(username: str = Depends(require_admin)) -> dict:
+    return {"username": username}
+
+
+@public_router.get("/auth/instagram/callback")
 async def instagram_callback(
     code: str | None = None,
     error: str | None = None,

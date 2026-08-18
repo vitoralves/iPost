@@ -1,9 +1,10 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from ipost.settings import get_settings
-from ipost_api.routes import router
+from ipost_api.deps import require_admin
+from ipost_api.routes import public_router, router
 
 
 def create_app() -> FastAPI:
@@ -17,7 +18,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(router)
+    app.include_router(public_router)
+    app.include_router(router, dependencies=[Depends(require_admin)])
 
     @app.get("/")
     def root() -> dict[str, str]:

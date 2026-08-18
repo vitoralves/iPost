@@ -11,7 +11,7 @@ def main() -> None:
         raise SystemExit("SUPABASE_DB_URL is missing")
     if settings.supabase_db_url:
         apply_sql(settings)
-        print("applied 001_config.sql")
+        print("applied sql migrations")
     try:
         kit = load_brand_kit(settings)
         print(f"brand kit ready ({len(kit.refs)} refs)")

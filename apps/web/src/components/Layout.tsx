@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
-import { getAuthStatus } from "../api"
+import { getAuthStatus, logout } from "../api"
 import { headerDate, nextEventLabel, TIMEZONE } from "../lib"
 import { useStore } from "../store"
 import type { AuthStatus } from "../types"
@@ -54,6 +54,17 @@ export function Layout() {
           ))}
         </nav>
         <div className="sidebar-foot">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              void logout().finally(() => {
+                window.location.assign("/login")
+              })
+            }}
+          >
+            Sign out
+          </button>
           <div className="connected">
             <span className="dot" />
             {auth?.connected ? "Connected" : "Not connected"}

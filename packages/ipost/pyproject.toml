@@ -18,6 +18,7 @@ dependencies = [
 [project.scripts]
 ipost-test-simple = "ipost.agents.test_simple:main"
 ipost-test-full = "ipost.agents.test_full:main"
+ipost-create-admin = "ipost.create_admin:main"
 
 [build-system]
 requires = ["hatchling"]

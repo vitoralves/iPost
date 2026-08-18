@@ -391,11 +391,13 @@ def delete_track(track_id: str, settings: Settings | None = None) -> None:
 
 def apply_sql(settings: Settings | None = None) -> None:
     settings = _settings(settings)
-    sql_path = Path(__file__).resolve().parent / "sql" / "001_config.sql"
-    sql = sql_path.read_text(encoding="utf-8")
+    sql_dir = Path(__file__).resolve().parent / "sql"
     if not settings.supabase_db_url:
         raise ConfigError("SUPABASE_DB_URL is required to apply SQL from the app")
-    statements = [part.strip() for part in sql.split(";") if part.strip()]
+    statements: list[str] = []
+    for sql_path in sorted(sql_dir.glob("*.sql")):
+        sql = sql_path.read_text(encoding="utf-8")
+        statements.extend(part.strip() for part in sql.split(";") if part.strip())
     try:
         with _postgres_connect(settings) as connection:
             for statement in statements:
