@@ -1,0 +1,11 @@
+aws_region = "us-west-2"
+image_uri  = ""
+scheduler_enabled = false
+ipost_mock_bedrock = "true"
+
+supabase_url               = "https://YOUR_PROJECT.supabase.co"
+supabase_service_role_key  = ""
+supabase_outbox_bucket     = "outbox"
+supabase_private_bucket    = "private"
+bedrock_model_id           = "us.amazon.nova-pro-v1:0"
+bedrock_image_model_id     = "stability.sd3-5-large-v1:0"

@@ -52,7 +52,7 @@
         font-size: 12px;
         color: var(--fg);
       }
-      input[type="text"], input[type="url"] {
+      input[type="text"], input[type="url"], textarea {
         width: 100%;
         margin-top: 8px;
         padding: 10px;
@@ -60,6 +60,12 @@
         background: #1a1a1a;
         color: var(--fg);
         font: 14px ui-sans-serif, system-ui, sans-serif;
+      }
+      textarea {
+        min-height: 220px;
+        resize: vertical;
+        white-space: pre-wrap;
+        line-height: 1.45;
       }
     </style>
   </head>
@@ -89,8 +95,8 @@
 
       <section>
         <p>Reel: mux still + tone into MP4, upload, then publish. Requires ffmpeg.</p>
-        <label>Caption
-          <input id="reel-caption" type="text" value="iPost phase 0" />
+        <label>Caption (line breaks are sent to Instagram)
+          <textarea id="reel-caption" placeholder="Paragraphs, blank lines, emoji and hashtags are kept."></textarea>
         </label>
         <div class="row">
           <button type="button" id="make-reel">Create placeholder reel + upload</button>

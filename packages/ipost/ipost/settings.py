@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +18,7 @@ class Settings(BaseSettings):
         env_file=(_repo_root() / ".env", Path.cwd() / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     instagram_app_id: str = ""
@@ -29,6 +31,17 @@ class Settings(BaseSettings):
     supabase_private_bucket: str = "private"
     cors_origins: str = "http://localhost:5173,http://localhost:8000"
     token_path: str = "data/instagram_token.json"
+    bedrock_model_id: str = "us.amazon.nova-pro-v1:0"
+    bedrock_region: str = "us-west-2"
+    bedrock_image_model_id: str = Field(
+        default="stability.sd3-5-large-v1:0",
+        validation_alias=AliasChoices("BEDROCK_IMAGE_MODEL_ID", "BEDROCK_CANVAS_MODEL_ID"),
+    )
+    ipost_mock_bedrock: bool = True
+    supabase_db_url: str = ""
+    supabase_db_region: str = "sa-east-1"
+    critic_pass_score: float = 7.0
+    max_attempts: int = 3
 
     @property
     def token_file(self) -> Path:

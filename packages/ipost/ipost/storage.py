@@ -43,7 +43,7 @@ def ensure_private_bucket(settings: Settings) -> None:
     _ensure_bucket(settings, settings.supabase_private_bucket, public=False)
 
 
-def upload_private_bytes(settings: Settings, object_path: str, data: bytes, content_type: str) -> None:
+def upload_private_bytes(settings: Settings, object_path: str, data: bytes, content_type: str) -> str:
     ensure_private_bucket(settings)
     client = supabase_client(settings)
     bucket = client.storage.from_(settings.supabase_private_bucket)
@@ -55,6 +55,29 @@ def upload_private_bytes(settings: Settings, object_path: str, data: bytes, cont
             "upsert": "true",
         },
     )
+    return object_path
+
+
+def delete_private_object(settings: Settings, object_path: str) -> None:
+    ensure_private_bucket(settings)
+    client = supabase_client(settings)
+    client.storage.from_(settings.supabase_private_bucket).remove([object_path])
+
+
+def signed_private_url(settings: Settings, object_path: str, expires_in: int = 3600) -> str:
+    ensure_private_bucket(settings)
+    client = supabase_client(settings)
+    payload = client.storage.from_(settings.supabase_private_bucket).create_signed_url(
+        object_path, expires_in
+    )
+    url = (
+        payload.get("signedURL")
+        or payload.get("signedUrl")
+        or payload.get("signed_url")
+    )
+    if not url:
+        raise StorageError("Could not sign private object")
+    return url
 
 
 def download_private_bytes(settings: Settings, object_path: str) -> bytes | None:

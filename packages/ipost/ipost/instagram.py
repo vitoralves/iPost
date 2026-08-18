@@ -131,7 +131,8 @@ async def _create_container(
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.post(
             f"{settings.instagram_graph_base}/{token.user_id}/media",
-            params={**params, "access_token": token.access_token},
+            params={"access_token": token.access_token},
+            data=params,
         )
         payload = response.json()
         _raise_for_graph(payload)
