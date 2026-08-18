@@ -20,6 +20,7 @@ from ipost.config_store import (
     get_track,
     list_topics,
     list_tracks,
+    load_brand_ref_file,
     upsert_brand_ref,
     upsert_topic,
     upsert_track,
@@ -343,18 +344,16 @@ async def upload_brand_ref(
 @router.get("/brand-kit/refs/{ref_id}")
 def get_brand_ref_file(ref_id: str, settings: Settings = Depends(settings_dep)) -> Response:
     try:
-        ref = get_brand_ref(ref_id, settings)
+        loaded = load_brand_ref_file(ref_id, settings)
     except ConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    if ref is None or not ref.path:
+    if loaded is None:
         raise HTTPException(status_code=404, detail="Style ref not found")
-    data = download_private_bytes(settings, ref.path)
-    if not data:
-        raise HTTPException(status_code=404, detail="Style ref file is missing")
+    data, path = loaded
     media = "image/jpeg"
-    if ref.path.endswith(".png"):
+    if path.endswith(".png"):
         media = "image/png"
-    elif ref.path.endswith(".webp"):
+    elif path.endswith(".webp"):
         media = "image/webp"
     return Response(content=data, media_type=media)
 

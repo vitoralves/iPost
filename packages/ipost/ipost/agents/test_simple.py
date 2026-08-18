@@ -53,7 +53,7 @@ def test_topic_rotation() -> None:
     _assert(first.enabled, "picked a disabled topic")
     _assert(first.slug == "faith", first.slug)
     viral = [item for item in eligible_topics(topics, job_type="REEL") if item.slug == "viral"]
-    _assert(viral == [], "viral reels should require 5 tracks")
+    _assert(len(viral) == 1, "viral should follow the same eligibility as other topics")
     audio = pick_audio(first, tracks)
     _assert(audio is not None and audio.id == "quiet", "tagged topic should resolve audio")
     print("topic rotation ok:", first.slug, audio.id)

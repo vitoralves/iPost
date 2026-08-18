@@ -7,7 +7,7 @@ from ipost.agents.schemas import TopicSpec, TrackSpec
 from ipost.brand import BrandKit, StyleRef
 from ipost.errors import ConfigError
 from ipost.settings import Settings, get_settings
-from ipost.storage import StorageError, delete_private_object, supabase_client
+from ipost.storage import StorageError, delete_private_object, download_private_bytes, supabase_client
 
 
 def _settings(settings: Settings | None) -> Settings:
@@ -52,8 +52,13 @@ def _style_ref_from_row(item: dict) -> StyleRef:
 def _persist_ref_url(ref: StyleRef, existing: dict[str, str]) -> str:
     if ref.path:
         return f"{PRIVATE_REF_PREFIX}{ref.path}"
-    if ref.url.startswith("/brand-kit/refs/") and ref.id in existing:
-        return existing[ref.id]
+    stored = existing.get(ref.id, "")
+    if stored.startswith(PRIVATE_REF_PREFIX):
+        return stored
+    if ref.url.startswith(PRIVATE_REF_PREFIX):
+        return ref.url
+    if ref.url.startswith("/brand-kit/refs/") and stored:
+        return stored
     return ref.url
 
 
@@ -140,19 +145,17 @@ def save_brand_kit(kit: BrandKit, settings: Settings | None = None) -> BrandKit:
         client.table("brand_kit").upsert(
             {"id": "default", "voice_tone": kit.voice_tone, "banned": kit.banned}
         ).execute()
-        client.table("style_refs").delete().neq("id", "").execute()
-        if kit.refs:
-            client.table("style_refs").insert(
-                [
-                    {
-                        "id": ref.id,
-                        "url": _persist_ref_url(ref, existing),
-                        "note": ref.note,
-                        "topic_slug": ref.topic.strip() or None,
-                        "sort_order": index,
-                    }
-                    for index, ref in enumerate(kit.refs)
-                ]
+        for index, ref in enumerate(kit.refs):
+            if not ref.id or not (ref.url.strip() or ref.path):
+                continue
+            client.table("style_refs").upsert(
+                {
+                    "id": ref.id,
+                    "url": _persist_ref_url(ref, existing),
+                    "note": ref.note,
+                    "topic_slug": ref.topic.strip() or None,
+                    "sort_order": index,
+                }
             ).execute()
     except Exception as exc:
         if _table_missing(exc):
@@ -216,6 +219,27 @@ def upsert_brand_ref(ref: StyleRef, settings: Settings | None = None) -> StyleRe
     return loaded
 
 
+def load_brand_ref_file(ref_id: str, settings: Settings | None = None) -> tuple[bytes, str] | None:
+    settings = _settings(settings)
+    ref = get_brand_ref(ref_id, settings)
+    candidates: list[str] = []
+    if ref and ref.path:
+        candidates.append(ref.path)
+    candidates.extend(f"brand/refs/{ref_id}{suffix}" for suffix in (".jpg", ".jpeg", ".png", ".webp"))
+    seen: set[str] = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
+        try:
+            data = download_private_bytes(settings, path)
+        except StorageError:
+            continue
+        if data:
+            return data, path
+    return None
+
+
 def delete_brand_ref(ref_id: str, settings: Settings | None = None) -> None:
     settings = _settings(settings)
     ref = get_brand_ref(ref_id, settings)
@@ -250,8 +274,8 @@ def list_topics(settings: Settings | None = None) -> list[TopicSpec]:
     ref_map: dict[str, list[str]] = {}
     for ref in refs:
         mapped = _style_ref_from_row(ref)
-        if mapped.url:
-            ref_map.setdefault(ref["topic_slug"], []).append(mapped.url)
+        if mapped.url or mapped.path:
+            ref_map.setdefault(ref["topic_slug"], []).append(f"/brand-kit/refs/{ref['id']}")
     return [
         TopicSpec(
             slug=row["slug"],

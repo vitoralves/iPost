@@ -130,12 +130,33 @@ export function saveBrandKit(kit: BrandKit) {
   })
 }
 
+function brandRefId(value: string) {
+  const text = value.trim()
+  if (!text) return ""
+  const match = text.match(/(?:brand-kit\/refs\/|brand\/refs\/)([^/?#]+)/i)
+  const raw = match?.[1] ?? (/^ref-[\w-]+(?:\.(?:png|jpe?g|webp))?$/i.test(text) ? text : "")
+  return raw.replace(/\.(png|jpe?g|webp)$/i, "")
+}
+
 export function refSrc(url: string) {
+  if (!url) return ""
+  const refId = brandRefId(url)
+  if (refId) {
+    return `${base}/brand-kit/refs/${refId}`
+  }
   if (url.startsWith("http") || url.startsWith("/media") || url.startsWith("blob:")) {
     return url
   }
   if (url.startsWith("/api")) return url
   return `${base}${url.startsWith("/") ? url : `/${url}`}`
+}
+
+export function styleRefSrc(ref: { id?: string; url?: string; path?: string }) {
+  const refId = brandRefId(ref.path || "") || brandRefId(ref.url || "") || brandRefId(ref.id || "")
+  if (refId) {
+    return `${base}/brand-kit/refs/${refId}`
+  }
+  return refSrc(ref.url || "")
 }
 
 export async function uploadBrandRef(file: File, id: string, note: string, topic: string) {

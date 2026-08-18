@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react"
 import {
   deleteBrandRef,
   getBrandKit,
-  refSrc,
   saveBrandKit,
+  styleRefSrc,
   uploadBrandRef,
 } from "../api"
 import { PlusIcon } from "../components/Icons"
@@ -19,6 +19,7 @@ function emptyRef(topic: string): StyleRef {
 export function BrandKitPage() {
   const { topics, notifyError } = useStore()
   const [kit, setKit] = useState<BrandKit | null>(null)
+  const [ready, setReady] = useState(false)
   const [status, setStatus] = useState("")
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState<string | null>(null)
@@ -38,6 +39,7 @@ export function BrandKitPage() {
         setKit(null)
         notifyError(exc instanceof Error ? exc.message : "Could not load brand kit")
       })
+      .finally(() => setReady(true))
   }, [notifyError])
 
   function pickFile(id: string) {
@@ -117,16 +119,27 @@ export function BrandKitPage() {
     }
   }
 
+  const assigned = kit?.refs.filter((item) => item.topic) ?? []
   const unassigned = kit?.refs.filter((item) => !item.topic) ?? []
+  const extraSlugs = [
+    ...new Set(
+      assigned
+        .map((item) => item.topic)
+        .filter((slug) => !topics.some((topic) => topic.slug === slug)),
+    ),
+  ]
   const groups = [
     ...topics.map((topic) => ({
       slug: topic.slug,
       name: topic.name,
-      refs: kit?.refs.filter((item) => item.topic === topic.slug) ?? [],
+      refs: assigned.filter((item) => item.topic === topic.slug),
     })),
-    ...(unassigned.length
-      ? [{ slug: "", name: "Unassigned", refs: unassigned }]
-      : []),
+    ...extraSlugs.map((slug) => ({
+      slug,
+      name: slug,
+      refs: assigned.filter((item) => item.topic === slug),
+    })),
+    ...(unassigned.length ? [{ slug: "", name: "Unassigned", refs: unassigned }] : []),
   ]
 
   return (
@@ -143,6 +156,7 @@ export function BrandKitPage() {
           {saving ? "Saving…" : "Save"}
         </button>
       </div>
+      {!ready ? <p className="page-sub">Loading brand kit…</p> : null}
       {status ? <p className="page-sub">{status}</p> : null}
       <input
         ref={fileRef}
@@ -165,12 +179,12 @@ export function BrandKitPage() {
                   <div className="ref-card" key={ref.id}>
                     <button
                       type="button"
-                      className={ref.url ? "ref-media" : "add-ref"}
+                      className={ref.url || ref.path ? "ref-media" : "add-ref"}
                       disabled={uploading === ref.id}
                       onClick={() => pickFile(ref.id)}
                     >
-                      {ref.url ? (
-                        <img src={refSrc(ref.url)} alt="" />
+                      {ref.url || ref.path ? (
+                        <img src={styleRefSrc(ref)} alt="" />
                       ) : (
                         <>
                           <PlusIcon />

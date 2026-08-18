@@ -35,17 +35,18 @@ function Slot({
           <span className={metaClass}>{meta}</span>
         </div>
       </div>
-      <Link to={`/jobs/${job.id}`}>
+      <Link className="slot-media" to={`/jobs/${job.id}`}>
         <MediaFrame job={job} />
       </Link>
-      {job.caption ? <p className="field-box caption">{job.caption}</p> : null}
-      {track ? (
-        <div className="audio-line">
-          <PlayIcon />
-          {track.title} — {track.artist}
-        </div>
-      ) : null}
-      <div className="slot-actions">
+      <div className="slot-copy">
+        {job.caption ? <p className="field-box caption">{job.caption}</p> : null}
+        {track ? (
+          <div className="audio-line">
+            <PlayIcon />
+            {track.title} — {track.artist}
+          </div>
+        ) : null}
+        <div className="slot-actions">
         <div className={`score-lg ${scoreTone(job.score)}`}>{formatScore(job.score)}</div>
         {!closed ? (
           <div className="btn-row">
@@ -109,12 +110,13 @@ function Slot({
             </Link>
           </div>
         )}
-        {review ? (
-          <div className="warn-bar">
-            <WarnIcon />
-            Needs review — will not auto-publish
-          </div>
-        ) : null}
+          {review ? (
+            <div className="warn-bar">
+              <WarnIcon />
+              Needs review — will not auto-publish
+            </div>
+          ) : null}
+        </div>
       </div>
     </article>
   )

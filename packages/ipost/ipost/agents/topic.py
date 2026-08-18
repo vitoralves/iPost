@@ -7,21 +7,13 @@ from ipost.errors import ConfigError
 def eligible_topics(
     topics: list[TopicSpec] | None = None,
     *,
-    min_audio_for_reel: int = 5,
     job_type: str = "STORY",
 ) -> list[TopicSpec]:
     if topics is None:
         from ipost.config_store import list_topics
 
         topics = list_topics()
-    result: list[TopicSpec] = []
-    for topic in topics:
-        if not topic.enabled:
-            continue
-        if job_type == "REEL" and topic.slug == "viral" and len(topic.audio_ids) < min_audio_for_reel:
-            continue
-        result.append(topic)
-    return result
+    return [topic for topic in topics if topic.enabled]
 
 
 def pick_topic(
@@ -30,7 +22,7 @@ def pick_topic(
     job_type: str = "STORY",
     exclude_last: TopicSlug | None = None,
 ) -> TopicSpec:
-    pool = eligible_topics(topics, job_type=job_type)
+    pool = eligible_topics(topics)
     if not pool:
         raise ConfigError("Add an enabled topic before generating.")
     ranked = sorted(

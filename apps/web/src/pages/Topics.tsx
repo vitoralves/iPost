@@ -1,11 +1,11 @@
-import { refSrc } from "../api"
-import { PlusIcon, WarnIcon } from "../components/Icons"
+import { styleRefSrc } from "../api"
+import { PlusIcon } from "../components/Icons"
 import { TopicPill } from "../components/Pills"
 import { daysAgoISO, formatCount } from "../lib"
 import { useStore } from "../store"
 
 export function TopicsPage() {
-  const { topics, jobs, loading, busy, toggleTopic, addTopic, syncAllInsights } = useStore()
+  const { topics, tracks, jobs, loading, busy, toggleTopic, addTopic, syncAllInsights } = useStore()
   const cutoff = daysAgoISO(7)
 
   function plays7d(slug: string) {
@@ -18,6 +18,11 @@ export function TopicsPage() {
           job.date >= cutoff,
       )
       .reduce((sum, job) => sum + (job.insights?.views ?? job.insights?.reach ?? 0), 0)
+  }
+
+  function trackCount(slug: string) {
+    const tagged = tracks.filter((track) => track.topics.includes(slug)).length
+    return Math.max(tagged, topics.find((topic) => topic.slug === slug)?.audio_ids.length ?? 0)
   }
 
   return (
@@ -76,11 +81,11 @@ export function TopicsPage() {
                 </div>
               </td>
               <td>{formatCount(plays7d(topic.slug))}</td>
-              <td>{topic.audio_ids.length} tracks</td>
+              <td>{trackCount(topic.slug)} tracks</td>
               <td>
                 <div className="refs">
                   {topic.refs.map((src) => (
-                    <img key={src} src={refSrc(src)} alt="" />
+                    <img key={src} src={styleRefSrc({ id: src, url: src })} alt="" />
                   ))}
                 </div>
               </td>
@@ -98,15 +103,6 @@ export function TopicsPage() {
           ))}
         </tbody>
       </table>
-      {topics
-        .filter((topic) => topic.slug === "viral" && topic.audio_ids.length < 5)
-        .map((topic) => (
-          <div className="warn-bar" key={topic.slug}>
-            <WarnIcon />
-            Only {topic.audio_ids.length} tracks available. Need 5 tracks before Viral can be
-            used for Reels.
-          </div>
-        ))}
       <button
         type="button"
         className="dashed"
