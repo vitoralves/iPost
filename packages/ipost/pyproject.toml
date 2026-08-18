@@ -25,3 +25,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["ipost"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"ipost/assets/logo.png" = "ipost/assets/logo.png"

@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import base64
-import json
-import random
 from io import BytesIO
 from pathlib import Path
 
 from ipost.fixtures import write_placeholder_still
 from ipost.mux import STORY_HEIGHT, STORY_WIDTH
+from ipost.overlay import apply_logo
 from ipost.settings import Settings
-
-NEGATIVE_PROMPT = (
-    "people, faces, hands, logos, watermarks, UI chrome, frames, borders, "
-    "readable text, captions, subtitles, watermarks"
-)
 
 
 class StillError(RuntimeError):
@@ -35,35 +29,26 @@ def _resize_to_story(data: bytes, destination: Path) -> Path:
 
 def generate_still(settings: Settings, prompt: str, destination: Path) -> Path:
     if settings.ipost_mock_bedrock:
-        return write_placeholder_still(destination, prompt[:48] or "iPost")
+        write_placeholder_still(destination, prompt[:48] or "iPost")
+        return apply_logo(destination, destination)
+    if not settings.openai_api_key:
+        raise StillError("OPENAI_API_KEY is required to generate stills")
 
-    import boto3
+    from openai import OpenAI
 
-    client = boto3.client("bedrock-runtime", region_name=settings.bedrock_region)
-    body = {
-        "prompt": prompt[:10000],
-        "mode": "text-to-image",
-        "aspect_ratio": "9:16",
-        "output_format": "jpeg",
-        "negative_prompt": NEGATIVE_PROMPT,
-        "seed": random.randint(0, 4294967294),
-    }
-    response = client.invoke_model(
-        modelId=settings.bedrock_image_model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=json.dumps(body),
+    client = OpenAI(api_key=settings.openai_api_key, timeout=180.0)
+    response = client.images.generate(
+        model=settings.openai_image_model_id,
+        prompt=prompt,
+        size="1024x1536",
+        quality="high",
+        n=1,
     )
-    payload = json.loads(response["body"].read())
-    reasons = payload.get("finish_reasons") or []
-    blocked = [item for item in reasons if item]
-    if blocked:
-        raise StillError(f"Image model filtered the request: {blocked[0]}")
-    images = payload.get("images") or []
-    if not images:
+    items = response.data or []
+    if not items:
         raise StillError("Image model returned no images")
-    first = images[0]
-    raw = first.get("base64") if isinstance(first, dict) else first
+    raw = items[0].b64_json
     if not raw:
         raise StillError("Image model returned an empty image")
-    return _resize_to_story(base64.b64decode(raw), destination)
+    _resize_to_story(base64.b64decode(raw), destination)
+    return apply_logo(destination, destination)

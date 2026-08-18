@@ -101,11 +101,12 @@ export function refSrc(url: string) {
   return `${base}${url.startsWith("/") ? url : `/${url}`}`
 }
 
-export async function uploadBrandRef(file: File, id: string, note: string) {
+export async function uploadBrandRef(file: File, id: string, note: string, topic: string) {
   const body = new FormData()
   body.append("file", file)
   body.append("ref_id", id)
   body.append("note", note)
+  body.append("topic", topic)
   const response = await fetch(`${base}/brand-kit/refs`, { method: "POST", body })
   if (!response.ok) {
     const detail = await response.text()

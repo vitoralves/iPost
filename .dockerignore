@@ -1,0 +1,12 @@
+.venv
+.git
+infra
+prototype
+data
+**/node_modules
+**/.terraform
+**/.vercel
+**/.env
+*.tfstate
+*.tfstate.*
+apps/web

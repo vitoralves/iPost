@@ -17,11 +17,23 @@ class InstagramError(RuntimeError):
         self.payload = payload or {}
 
 
-def _raise_for_graph(payload: dict) -> None:
+def _graph_error(payload: dict) -> dict | None:
     error = payload.get("error")
+    if isinstance(error, dict):
+        return error
     if error:
-        message = error.get("message") if isinstance(error, dict) else str(error)
-        raise InstagramError(message or "Instagram API error", payload)
+        return {"message": str(error)}
+    return None
+
+
+def _raise_for_graph(payload: dict) -> None:
+    error = _graph_error(payload)
+    if error:
+        message = error.get("message") or "Instagram API error"
+        code = error.get("code")
+        if code is not None:
+            message = f"{message} ({code})"
+        raise InstagramError(message, payload)
 
 
 def authorization_url(settings: Settings, state: str = "ipost") -> str:
@@ -161,6 +173,10 @@ async def _wait_until_finished(
                 params={"fields": "status_code,status", "access_token": token.access_token},
             )
             payload = response.json()
+            error = _graph_error(payload)
+            if error and error.get("code") == 803:
+                await asyncio.sleep(delay_seconds)
+                continue
             _raise_for_graph(payload)
             status = payload.get("status_code")
             if status == "FINISHED":
@@ -176,19 +192,28 @@ async def _publish_container(
     token: InstagramToken,
     container_id: str,
 ) -> str:
+    import asyncio
+
     async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            f"{settings.instagram_graph_base}/{token.user_id}/media_publish",
-            params={"creation_id": container_id, "access_token": token.access_token},
-        )
-        payload = response.json()
-        _raise_for_graph(payload)
-        if response.status_code >= 400:
-            raise InstagramError("Failed to publish media", payload)
-        media_id = payload.get("id")
-        if not media_id:
-            raise InstagramError("Publish response missing id", payload)
-        return str(media_id)
+        payload: dict = {}
+        for attempt in range(4):
+            response = await client.post(
+                f"{settings.instagram_graph_base}/{token.user_id}/media_publish",
+                params={"creation_id": container_id, "access_token": token.access_token},
+            )
+            payload = response.json()
+            error = _graph_error(payload)
+            if error and error.get("code") == 803 and attempt < 3:
+                await asyncio.sleep(2)
+                continue
+            _raise_for_graph(payload)
+            if response.status_code >= 400:
+                raise InstagramError("Failed to publish media", payload)
+            media_id = payload.get("id")
+            if not media_id:
+                raise InstagramError("Publish response missing id", payload)
+            return str(media_id)
+        raise InstagramError("Failed to publish media", payload)
 
 
 async def publish_story(settings: Settings, token: InstagramToken, image_url: str) -> str:

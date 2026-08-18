@@ -8,6 +8,7 @@ from ipost.agents.schemas import JobRecord, TimelineStep
 from ipost.config_store import list_topics, upsert_topic
 from ipost.instagram import InstagramError, publish_story
 from ipost.jobs import save_job
+from ipost.notify import notify_publish_failed
 from ipost.settings import Settings
 from ipost.storage import StorageError, upload_file
 from ipost.token_store import InstagramToken
@@ -41,6 +42,14 @@ def mark_topic_used(slug: str, day: str, settings: Settings) -> None:
             return
 
 
+def persist_incomplete_generate(job: JobRecord, settings: Settings, error: str) -> JobRecord:
+    has_file = bool(job.still_path) and Path(job.still_path).is_file()
+    if not job.still_url and not has_file and not job.still_path.startswith("http"):
+        job.status = "FAILED"
+    job.must_fix = error
+    return save_job(job, settings)
+
+
 def finalize_generated_job(job: JobRecord, settings: Settings) -> JobRecord:
     attach_public_still(job, settings)
     mark_topic_used(job.topic, job.date, settings)
@@ -67,6 +76,7 @@ async def publish_story_job(
         job.status = "FAILED"
         job.must_fix = str(exc)
         save_job(job, settings)
+        notify_publish_failed(job, settings, str(exc))
         raise JobActionError(str(exc)) from exc
     job.status = "PUBLISHED"
     job.must_fix = None

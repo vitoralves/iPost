@@ -3,12 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from agents import Agent, RunContextWrapper, Runner, function_tool, trace
+from agents import RunContextWrapper, function_tool
 
 from ipost.agents.canvas import generate_still
-from ipost.agents.model import bedrock_model
 from ipost.agents.schemas import JobType, PlanOutput
-from ipost.agents.templates import CREATOR_INSTRUCTIONS, CREATOR_PROMPT
+from ipost.agents.templates import STILL_BRIEF, THEME_GUIDANCE
 from ipost.fixtures import write_tone_wav
 from ipost.mux import MuxError, mux_still_with_audio
 from ipost.brand import load_brand_kit
@@ -43,8 +42,9 @@ async def retrieve_style_refs(wrapper: RunContextWrapper[CreatorContext]) -> str
 
     ctx = wrapper.context
     kit = load_brand_kit(ctx.settings)
+    topic = ctx.plan.topic
     lines: list[str] = []
-    for ref in kit.refs:
+    for ref in kit.refs_for_topic(topic):
         url = ref.url
         if ref.path:
             try:
@@ -58,13 +58,16 @@ async def retrieve_style_refs(wrapper: RunContextWrapper[CreatorContext]) -> str
             lines.append(note)
     ctx.refs = lines
     if not ctx.refs:
-        return "No style refs in Brand Kit"
-    return "Style refs:\n" + "\n".join(f"- {line}" for line in ctx.refs)
+        return f"No style refs for topic {topic}"
+    return f"Style refs for {topic}:\n" + "\n".join(f"- {line}" for line in ctx.refs)
 
 
 @function_tool
 async def generate_still_tool(wrapper: RunContextWrapper[CreatorContext], prompt: str) -> str:
     ctx = wrapper.context
+    kit = load_brand_kit(ctx.settings)
+    notes = [ref.note.strip() for ref in kit.refs_for_topic(ctx.plan.topic) if ref.note.strip()]
+    prompt = _still_prompt(ctx.plan, ctx.job_type, notes)
     destination = ctx.work_dir / f"{ctx.job_id}-still.jpg"
     generate_still(ctx.settings, prompt, destination)
     ctx.still_path = str(destination)
@@ -114,6 +117,52 @@ async def mux_reel(wrapper: RunContextWrapper[CreatorContext]) -> str:
     return f"Wrote reel {video}"
 
 
+def _still_prompt(
+    plan: PlanOutput,
+    job_type: JobType,
+    notes: list[str],
+    must_fix: str | None = None,
+) -> str:
+    theme = plan.topic.strip() or "hope"
+    guidance = THEME_GUIDANCE.get(
+        theme,
+        "Find the strongest emotional and visual metaphor. Avoid the obvious religious stock image.",
+    )
+    look_notes = ""
+    if notes:
+        look_notes = (
+            "\nLook notes from the brand kit (match this world, do not copy a layout):\n"
+            + "\n".join(f"- {note}" for note in notes)
+        )
+    fix = f"\nHonor this correction: {must_fix.strip()}\n" if must_fix and must_fix.strip() else ""
+    phrase = plan.on_image_text.strip() if job_type == "STORY" else ""
+    visual = plan.visual_prompt.strip() or "A private human moment connected to this theme."
+    return STILL_BRIEF.format(
+        theme=theme,
+        theme_guidance=guidance,
+        visual=visual,
+        phrase=phrase or "Um pensamento curto em português.",
+        look_notes=look_notes,
+        must_fix=fix,
+    )
+
+
+def _materialize_still(
+    settings: Settings,
+    *,
+    job_id: str,
+    job_type: JobType,
+    plan: PlanOutput,
+    work_dir: Path,
+    must_fix: str | None = None,
+) -> Path:
+    kit = load_brand_kit(settings)
+    notes = [ref.note.strip() for ref in kit.refs_for_topic(plan.topic) if ref.note.strip()]
+    still = work_dir / f"{job_id}-still.jpg"
+    generate_still(settings, _still_prompt(plan, job_type, notes, must_fix), still)
+    return still
+
+
 async def run_creator(
     settings: Settings,
     *,
@@ -127,61 +176,21 @@ async def run_creator(
     max_attempts: int,
     must_fix: str | None,
 ) -> CreatorResult:
-    context = CreatorContext(
-        settings=settings,
+    still = _materialize_still(
+        settings,
         job_id=job_id,
         job_type=job_type,
         plan=plan,
         work_dir=work_dir,
-        audio_id=audio_id,
-        caption=plan.caption,
+        must_fix=must_fix,
     )
-    if settings.ipost_mock_bedrock:
-        still = work_dir / f"{job_id}-still.jpg"
-        generate_still(settings, plan.visual_prompt, still)
-        if job_type == "STORY" and plan.on_image_text:
-            burned = work_dir / f"{job_id}-story.jpg"
-            burn_text(still, plan.on_image_text, burned)
-            still = burned
-        video = ""
-        if job_type == "REEL":
-            audio = work_dir / f"{job_id}-audio.wav"
+    video = ""
+    caption = plan.caption
+    if job_type == "REEL":
+        audio = work_dir / f"{job_id}-audio.wav"
+        if not audio.exists():
             write_tone_wav(audio)
-            dest = work_dir / f"{job_id}-reel.mp4"
-            mux_still_with_audio(still, audio, dest)
-            video = str(dest)
-        return CreatorResult(still_path=str(still), video_path=video, caption=plan.caption)
-
-    model = bedrock_model(settings)
-    task = CREATOR_PROMPT.format(
-        job_type=job_type,
-        date=date,
-        topic=plan.topic,
-        hook=plan.hook,
-        visual_prompt=plan.visual_prompt,
-        on_image_text=plan.on_image_text or "(none)",
-        caption=plan.caption or "(none)",
-        audio_id=audio_id or "(none)",
-        attempt=attempt,
-        max_attempts=max_attempts,
-        must_fix=must_fix or "(none)",
-    )
-    with trace("iPost Creator"):
-        agent = Agent[CreatorContext](
-            name="Creator",
-            instructions=CREATOR_INSTRUCTIONS,
-            model=model,
-            tools=[
-                retrieve_style_refs,
-                generate_still_tool,
-                render_story_text,
-                write_caption,
-                mux_reel,
-            ],
-        )
-        await Runner.run(agent, input=task, context=context, max_turns=12)
-    return CreatorResult(
-        still_path=context.still_path,
-        video_path=context.video_path,
-        caption=context.caption,
-    )
+        dest = work_dir / f"{job_id}-reel.mp4"
+        mux_still_with_audio(still, audio, dest)
+        video = str(dest)
+    return CreatorResult(still_path=str(still), video_path=video, caption=caption)

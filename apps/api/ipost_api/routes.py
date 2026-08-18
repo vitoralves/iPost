@@ -11,6 +11,7 @@ from ipost.instagram import (
     publish_story,
 )
 from ipost.mux import MuxError, mux_still_with_audio
+from ipost.agents.canvas import StillError
 from ipost.agents.pipeline import generate_job
 from ipost.agents.schemas import JobRecord, JobType, TopicSlug, TopicSpec, TrackSpec
 from ipost.brand import BrandKit, StyleRef, load_brand_kit, save_brand_kit
@@ -27,10 +28,12 @@ from ipost.errors import ConfigError
 from ipost.job_actions import (
     JobActionError,
     finalize_generated_job,
+    persist_incomplete_generate,
     publish_story_job,
     set_terminal_status,
 )
 from ipost.jobs import get_job, list_jobs, save_job
+from ipost.notify import notify_generate_failed, notify_needs_review
 from ipost.settings import Settings
 from ipost.storage import StorageError, download_private_bytes, upload_bytes, upload_file, upload_private_bytes
 from ipost.token_store import days_until_expiry, load_token, save_token
@@ -171,15 +174,22 @@ async def publish_reel_route(
 async def generate_route(body: GenerateBody, settings: Settings = Depends(settings_dep)) -> dict:
     if body.type != "STORY":
         raise HTTPException(status_code=400, detail="Only Story generate is available in Phase 1")
-    job = await generate_job(body.type, settings=settings, date=body.date, forced_topic=body.topic)
+    job = None
     try:
+        job = await generate_job(body.type, settings=settings, date=body.date, forced_topic=body.topic)
         job = finalize_generated_job(job, settings)
-    except (ConfigError, JobActionError) as exc:
-        try:
-            save_job(job, settings)
-        except ConfigError:
-            pass
+    except StillError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (ConfigError, JobActionError) as exc:
+        if job is not None:
+            try:
+                persist_incomplete_generate(job, settings, str(exc))
+            except ConfigError:
+                pass
+            notify_generate_failed(job, settings, str(exc))
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if job.status == "NEEDS_REVIEW":
+        notify_needs_review(job, settings)
     return job.model_dump()
 
 
@@ -281,6 +291,7 @@ async def upload_brand_ref(
     file: UploadFile = File(...),
     ref_id: str | None = Form(default=None),
     note: str = Form(default=""),
+    topic: str = Form(default=""),
     settings: Settings = Depends(settings_dep),
 ) -> dict:
     data = await file.read()
@@ -294,10 +305,15 @@ async def upload_brand_ref(
         raise HTTPException(status_code=400, detail="Use a JPEG, PNG, or WebP image")
     ident = (ref_id or "").strip() or file.filename or "ref"
     ident = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in ident)[:40]
+    if not topic.strip():
+        raise HTTPException(status_code=400, detail="Pick a topic for this style ref")
     path = f"brand/refs/{ident}{suffix}"
     try:
         upload_private_bytes(settings, path, data, content_type)
-        ref = upsert_brand_ref(StyleRef(id=ident, path=path, note=note.strip()), settings)
+        ref = upsert_brand_ref(
+            StyleRef(id=ident, path=path, note=note.strip(), topic=topic.strip()),
+            settings,
+        )
     except (ConfigError, StorageError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return ref.model_dump()

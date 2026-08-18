@@ -6,6 +6,35 @@ from PIL import Image, ImageDraw, ImageFont
 
 from ipost.mux import STORY_HEIGHT, STORY_WIDTH
 
+LOGO_SIZE = 128
+LOGO_BOTTOM = 140
+
+
+def logo_path() -> Path:
+    here = Path(__file__).resolve().parent
+    bundled = here / "assets" / "logo.png"
+    if bundled.is_file():
+        return bundled
+    for parent in here.parents:
+        candidate = parent / "LOGO.png"
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError("Bundled Koinonia logo is missing")
+
+
+def apply_logo(source: Path, destination: Path | None = None) -> Path:
+    destination = destination or source
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.open(source).convert("RGBA")
+    image = image.resize((STORY_WIDTH, STORY_HEIGHT))
+    mark = Image.open(logo_path()).convert("RGBA")
+    mark = mark.resize((LOGO_SIZE, LOGO_SIZE), Image.Resampling.LANCZOS)
+    x = (STORY_WIDTH - LOGO_SIZE) // 2
+    y = STORY_HEIGHT - LOGO_SIZE - LOGO_BOTTOM
+    image.paste(mark, (x, y), mark)
+    image.convert("RGB").save(destination, format="JPEG", quality=92)
+    return destination
+
 
 def _font(size: int) -> ImageFont.ImageFont:
     try:

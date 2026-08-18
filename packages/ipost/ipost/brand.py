@@ -10,6 +10,7 @@ class StyleRef(BaseModel):
     url: str = ""
     path: str = ""
     note: str = ""
+    topic: str = ""
 
 
 class BrandKit(BaseModel):
@@ -20,13 +21,19 @@ class BrandKit(BaseModel):
     def banned_text(self) -> str:
         return "; ".join(item for item in self.banned if item.strip())
 
-    def ref_lines(self) -> list[str]:
+    def refs_for_topic(self, topic: str) -> list[StyleRef]:
+        slug = topic.strip()
+        return [ref for ref in self.refs if ref.topic == slug]
+
+    def ref_lines(self, topic: str | None = None) -> list[str]:
+        refs = self.refs_for_topic(topic) if topic else self.refs
         lines: list[str] = []
-        for ref in self.refs:
-            if not ref.url.strip():
+        for ref in refs:
+            if not ref.url.strip() and not ref.path:
                 continue
             note = ref.note.strip() or "style reference"
-            lines.append(f"{note} ({ref.url})")
+            label = f"{ref.topic} · {note}" if ref.topic else note
+            lines.append(f"{label} ({ref.url})" if ref.url else label)
         return lines
 
 

@@ -1,3 +1,4 @@
+import { refSrc } from "../api"
 import { PlusIcon, WarnIcon } from "../components/Icons"
 import { TopicPill } from "../components/Pills"
 import { useStore } from "../store"
@@ -54,7 +55,7 @@ export function TopicsPage() {
               <td>
                 <div className="refs">
                   {topic.refs.map((src) => (
-                    <img key={src} src={src} alt="" />
+                    <img key={src} src={refSrc(src)} alt="" />
                   ))}
                 </div>
               </td>

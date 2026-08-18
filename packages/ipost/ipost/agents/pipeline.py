@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 from uuid import uuid4
 
+from ipost.agents.canvas import StillError
 from ipost.agents.creator import run_creator
 from ipost.agents.critic import run_critic
 from ipost.agents.planner import run_planner
@@ -29,7 +30,8 @@ def _slot(job_type: JobType) -> tuple[Slot, str]:
 
 
 def _work_dir(settings: Settings, job_id: str) -> Path:
-    root = Path("/tmp") if os.environ.get("AWS_LAMBDA_FUNCTION_NAME") else settings.token_file.parent
+    ephemeral = os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("FLY_APP_NAME")
+    root = Path("/tmp") if ephemeral else settings.token_file.parent
     path = root / "jobs" / job_id
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -95,6 +97,8 @@ async def generate_job(
         job.still_path = artifact.still_path
         job.video_path = artifact.video_path
         job.caption = artifact.caption or job.caption
+        if not artifact.still_path or not Path(artifact.still_path).is_file():
+            raise StillError("Still was not written")
         job.status = "CRITIQUE"
         critique = await run_critic(
             settings,

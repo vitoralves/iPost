@@ -32,7 +32,7 @@ async def run_planner(
                 topic=topic,
                 hook="Faith can be quiet and still be enough.",
                 visual_prompt="9:16 photograph of mountain peaks above a sea of clouds at dawn, cool light, no people, no text",
-                on_image_text="Faith can be quiet.",
+                on_image_text="A fé também pode ser quieta.",
                 caption="",
                 avoid=["stock sunset cliché", "preaching"],
             )

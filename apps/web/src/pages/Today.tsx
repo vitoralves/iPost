@@ -119,6 +119,7 @@ export function TodayPage() {
   const todayDate = todayISO()
   const story = jobs.find((item) => item.date === todayDate && item.type === "STORY")
   const reel = jobs.find((item) => item.date === todayDate && item.type === "REEL")
+  const canGenerate = !story || !story.stillUrl
 
   return (
     <div className="page">
@@ -127,16 +128,16 @@ export function TodayPage() {
           <h1 className="page-title">Today</h1>
           <p className="page-sub">{REVIEW_WINDOW}</p>
         </div>
-        {!story ? (
+        {!canGenerate ? null : (
           <button
             type="button"
             className="btn primary"
             disabled={busy || loading}
-            onClick={() => generateStory(todayDate)}
+            onClick={() => generateStory(todayDate, story?.topic)}
           >
-            {busy ? "Generating…" : "Generate Story"}
+            {busy ? "Generating…" : story ? "Regenerate Story" : "Generate Story"}
           </button>
-        ) : null}
+        )}
       </div>
       {loading ? <p className="page-sub">Loading…</p> : null}
       {!loading && !story ? <p className="page-sub">No Story for today yet.</p> : null}

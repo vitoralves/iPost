@@ -111,7 +111,12 @@ resource "aws_lambda_function" "worker" {
       BEDROCK_REGION             = var.aws_region
       BEDROCK_MODEL_ID           = var.bedrock_model_id
       BEDROCK_IMAGE_MODEL_ID     = var.bedrock_image_model_id
+      OPENAI_API_KEY             = var.openai_api_key
+      OPENAI_IMAGE_MODEL_ID      = var.openai_image_model_id
       IPOST_MOCK_BEDROCK         = var.ipost_mock_bedrock
+      ALERT_EMAIL                = var.alert_email
+      RESEND_API_KEY             = var.resend_api_key
+      RESEND_FROM                = var.resend_from
     }
   }
 

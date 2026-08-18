@@ -7,8 +7,9 @@ from typing import Any
 from ipost.agents.pipeline import generate_job, today_iso
 from ipost.agents.schemas import JobType
 from ipost.errors import ConfigError
-from ipost.job_actions import JobActionError, finalize_generated_job, publish_story_job
+from ipost.job_actions import JobActionError, finalize_generated_job, persist_incomplete_generate, publish_story_job
 from ipost.jobs import save_job, today_story
+from ipost.notify import notify, notify_generate_failed, notify_needs_review
 from ipost.settings import get_settings
 from ipost.token_store import load_token
 
@@ -32,8 +33,11 @@ def _generate(event: dict[str, Any]) -> dict[str, Any]:
     )
     try:
         finalize_generated_job(job, settings)
-    except (JobActionError, ConfigError):
-        save_job(job, settings)
+    except (JobActionError, ConfigError) as exc:
+        persist_incomplete_generate(job, settings, str(exc))
+        notify_generate_failed(job, settings, str(exc))
+    if job.status == "NEEDS_REVIEW":
+        notify_needs_review(job, settings)
     return _response(200, {"success": True, "job": job.model_dump()})
 
 
@@ -46,6 +50,7 @@ async def _publish() -> dict[str, Any]:
         return _response(200, {"success": True, "skipped": f"story is {job.status}"})
     token = load_token(settings)
     if token is None:
+        notify(settings, subject="iPost: publish skipped", body="Instagram is not connected.")
         return _response(401, {"error": "Instagram is not connected"})
     try:
         job, media_id = await publish_story_job(job, settings, token)

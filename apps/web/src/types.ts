@@ -108,6 +108,7 @@ export type StyleRef = {
   url: string
   path?: string
   note: string
+  topic: string
 }
 
 export type BrandKit = {

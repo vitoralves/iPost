@@ -37,11 +37,16 @@ class Settings(BaseSettings):
         default="stability.sd3-5-large-v1:0",
         validation_alias=AliasChoices("BEDROCK_IMAGE_MODEL_ID", "BEDROCK_CANVAS_MODEL_ID"),
     )
+    openai_api_key: str = ""
+    openai_image_model_id: str = "gpt-image-2"
     ipost_mock_bedrock: bool = True
     supabase_db_url: str = ""
     supabase_db_region: str = "sa-east-1"
     critic_pass_score: float = 7.0
     max_attempts: int = 3
+    alert_email: str = "vitordgav@gmail.com"
+    resend_api_key: str = ""
+    resend_from: str = "iPost <onboarding@resend.dev>"
 
     @property
     def token_file(self) -> Path:

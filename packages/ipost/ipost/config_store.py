@@ -41,7 +41,13 @@ def _style_ref_from_row(item: dict) -> StyleRef:
     if raw.startswith(PRIVATE_REF_PREFIX):
         path = raw[len(PRIVATE_REF_PREFIX) :]
         url = f"/brand-kit/refs/{item['id']}"
-    return StyleRef(id=item["id"], url=url, path=path, note=item.get("note") or "")
+    return StyleRef(
+        id=item["id"],
+        url=url,
+        path=path,
+        note=item.get("note") or "",
+        topic=item.get("topic_slug") or "",
+    )
 
 
 def _persist_ref_url(ref: StyleRef, existing: dict[str, str]) -> str:
@@ -115,7 +121,6 @@ def load_brand_kit(settings: Settings | None = None) -> BrandKit:
         refs = (
             client.table("style_refs")
             .select("*")
-            .is_("topic_slug", "null")
             .order("sort_order")
             .execute()
             .data
@@ -140,19 +145,12 @@ def save_brand_kit(kit: BrandKit, settings: Settings | None = None) -> BrandKit:
     settings = _settings(settings)
     client = _require_client(settings)
     try:
-        current = (
-            client.table("style_refs")
-            .select("id,url")
-            .is_("topic_slug", "null")
-            .execute()
-            .data
-            or []
-        )
+        current = client.table("style_refs").select("id,url").execute().data or []
         existing = {item["id"]: item["url"] for item in current}
         client.table("brand_kit").upsert(
             {"id": "default", "voice_tone": kit.voice_tone, "banned": kit.banned}
         ).execute()
-        client.table("style_refs").delete().is_("topic_slug", "null").execute()
+        client.table("style_refs").delete().neq("id", "").execute()
         if kit.refs:
             client.table("style_refs").insert(
                 [
@@ -160,7 +158,7 @@ def save_brand_kit(kit: BrandKit, settings: Settings | None = None) -> BrandKit:
                         "id": ref.id,
                         "url": _persist_ref_url(ref, existing),
                         "note": ref.note,
-                        "topic_slug": None,
+                        "topic_slug": ref.topic.strip() or None,
                         "sort_order": index,
                     }
                     for index, ref in enumerate(kit.refs)
@@ -181,7 +179,6 @@ def get_brand_ref(ref_id: str, settings: Settings | None = None) -> StyleRef | N
             client.table("style_refs")
             .select("*")
             .eq("id", ref_id)
-            .is_("topic_slug", "null")
             .execute()
             .data
             or []
@@ -202,7 +199,6 @@ def upsert_brand_ref(ref: StyleRef, settings: Settings | None = None) -> StyleRe
         current = (
             client.table("style_refs")
             .select("id,url,sort_order")
-            .is_("topic_slug", "null")
             .execute()
             .data
             or []
@@ -216,7 +212,7 @@ def upsert_brand_ref(ref: StyleRef, settings: Settings | None = None) -> StyleRe
                 "id": ref.id,
                 "url": _persist_ref_url(ref, existing),
                 "note": ref.note,
-                "topic_slug": None,
+                "topic_slug": ref.topic.strip() or None,
                 "sort_order": sort_order,
             }
         ).execute()
@@ -242,7 +238,7 @@ def delete_brand_ref(ref_id: str, settings: Settings | None = None) -> None:
             pass
     client = _require_client(settings)
     try:
-        client.table("style_refs").delete().eq("id", ref_id).is_("topic_slug", "null").execute()
+        client.table("style_refs").delete().eq("id", ref_id).execute()
     except Exception as exc:
         raise ConfigError(str(exc)) from exc
 
@@ -266,7 +262,9 @@ def list_topics(settings: Settings | None = None) -> list[TopicSpec]:
         audio_map.setdefault(link["topic_slug"], []).append(link["track_id"])
     ref_map: dict[str, list[str]] = {}
     for ref in refs:
-        ref_map.setdefault(ref["topic_slug"], []).append(ref["url"])
+        mapped = _style_ref_from_row(ref)
+        if mapped.url:
+            ref_map.setdefault(ref["topic_slug"], []).append(mapped.url)
     return [
         TopicSpec(
             slug=row["slug"],
@@ -294,20 +292,6 @@ def upsert_topic(topic: TopicSpec, settings: Settings | None = None) -> TopicSpe
                 "last_used": topic.last_used,
             }
         ).execute()
-        client.table("style_refs").delete().eq("topic_slug", topic.slug).execute()
-        if topic.refs:
-            client.table("style_refs").insert(
-                [
-                    {
-                        "id": f"{topic.slug}-ref-{index + 1}",
-                        "url": url,
-                        "note": "",
-                        "topic_slug": topic.slug,
-                        "sort_order": index,
-                    }
-                    for index, url in enumerate(topic.refs)
-                ]
-            ).execute()
     except Exception as exc:
         if _table_missing(exc):
             raise _missing_tables() from exc
