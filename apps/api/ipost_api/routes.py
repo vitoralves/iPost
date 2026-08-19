@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
@@ -9,8 +11,7 @@ from ipost.instagram import (
     authorization_url,
     exchange_code,
 )
-from ipost.agents.canvas import StillError
-from ipost.agents.pipeline import generate_job
+from ipost.agents.pipeline import generate_job, prepare_generate_job
 from ipost.agents.schemas import JobRecord, JobType, TopicSlug, TopicSpec, TrackSpec
 from ipost.auth import SESSION_COOKIE, authenticate, cookie_params, sign_session
 from ipost.brand import BrandKit, StyleRef, load_brand_kit, save_brand_kit
@@ -42,6 +43,8 @@ from ipost.settings import Settings
 from ipost.storage import StorageError, download_private_bytes, upload_private_bytes
 from ipost.token_store import days_until_expiry, load_token, save_token
 from ipost_api.deps import require_admin, require_token, settings_dep
+
+logger = logging.getLogger(__name__)
 
 public_router = APIRouter()
 router = APIRouter()
@@ -136,25 +139,41 @@ def auth_status(settings: Settings = Depends(settings_dep)) -> dict:
     }
 
 
+async def _run_generate(job: JobRecord, settings: Settings) -> None:
+    try:
+        generated = await generate_job(
+            job.type,
+            settings=settings,
+            date=job.date,
+            forced_topic=job.topic,
+            existing=job,
+        )
+        generated = finalize_generated_job(generated, settings)
+        if generated.status == "NEEDS_REVIEW":
+            notify_needs_review(generated, settings)
+    except Exception as exc:
+        logger.exception("generate failed for %s", job.id)
+        try:
+            persist_incomplete_generate(job, settings, str(exc))
+        except ConfigError:
+            pass
+        notify_generate_failed(job, settings, str(exc))
+
+
 @router.post("/jobs/generate")
 async def generate_route(body: GenerateBody, settings: Settings = Depends(settings_dep)) -> dict:
-    job = None
     try:
-        job = await generate_job(body.type, settings=settings, date=body.date, forced_topic=body.topic)
-        job = finalize_generated_job(job, settings)
-    except StillError as exc:
+        job = prepare_generate_job(
+            body.type, settings=settings, date=body.date, forced_topic=body.topic
+        )
+        job = save_job(job, settings)
+    except ConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except (ConfigError, JobActionError) as exc:
-        if job is not None:
-            try:
-                persist_incomplete_generate(job, settings, str(exc))
-            except ConfigError:
-                pass
-            notify_generate_failed(job, settings, str(exc))
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    if job.status == "NEEDS_REVIEW":
-        notify_needs_review(job, settings)
-    return job.model_dump()
+    await _run_generate(job, settings)
+    saved = get_job(job.id, settings) or job
+    if saved.status == "FAILED":
+        raise HTTPException(status_code=503, detail=saved.must_fix or "Generation failed")
+    return saved.model_dump()
 
 
 @router.get("/jobs")

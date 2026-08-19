@@ -60,6 +60,9 @@ async function readError(response: Response) {
       throw exc
     }
   }
+  if (response.status === 502 || response.status === 504) {
+    throw new Error("The API is starting up or the request timed out. Wait a few seconds and try again.")
+  }
   throw new Error(detail || `API ${response.status}`)
 }
 
@@ -270,11 +273,36 @@ export function saveJob(job: Job) {
   }).then(toJob)
 }
 
-export function generateJob(type: Job["type"] = "STORY", date?: string, topic?: string) {
-  return request<JobPayload>("/jobs/generate", {
-    method: "POST",
-    body: JSON.stringify({ type, date, topic }),
-  }).then(toJob)
+const GENERATE_IN_FLIGHT = new Set(["GENERATING", "CRITIQUE", "REGENERATING"])
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+export async function getJob(id: string) {
+  return request<JobPayload>(`/jobs/${id}`).then(toJob)
+}
+
+export async function generateJob(type: Job["type"] = "STORY", date?: string, topic?: string) {
+  const started = toJob(
+    await request<JobPayload>("/jobs/generate", {
+      method: "POST",
+      body: JSON.stringify({ type, date, topic }),
+    }),
+  )
+  let job = started
+  const deadline = Date.now() + 8 * 60 * 1000
+  while (GENERATE_IN_FLIGHT.has(job.status) && Date.now() < deadline) {
+    await sleep(2000)
+    job = await getJob(job.id)
+  }
+  if (job.status === "FAILED") {
+    throw new Error(job.mustFix || "Generation failed")
+  }
+  if (GENERATE_IN_FLIGHT.has(job.status)) {
+    throw new Error("Generation is still running. Refresh in a minute to see the result.")
+  }
+  return job
 }
 
 export function attachJobAudio(id: string, trackId: string) {

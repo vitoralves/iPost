@@ -16,7 +16,7 @@ from ipost.agents.topic import pick_audio, pick_topic
 from ipost.config_store import list_topics
 from ipost.errors import ConfigError
 from ipost.insights import performance_note, track_play_scores
-from ipost.jobs import list_jobs
+from ipost.jobs import list_jobs, save_job
 from ipost.settings import Settings, get_settings
 
 
@@ -53,7 +53,7 @@ def _reel_audio_id(topic_slug: str, settings: Settings) -> str:
     return track.id
 
 
-async def generate_job(
+def prepare_generate_job(
     job_type: JobType,
     *,
     settings: Settings | None = None,
@@ -66,10 +66,10 @@ async def generate_job(
     topic = pick_topic(job_type=job_type).model_copy()
     if forced_topic:
         topic.slug = forced_topic
-    audience = performance_note(list_jobs(settings), day)
+    audio_id = _reel_audio_id(topic.slug, settings) if job_type == "REEL" else None
     job_id = f"{job_type.lower()}-{day}-{uuid4().hex[:8]}"
-    work_dir = _work_dir(settings, job_id)
-    job = JobRecord(
+    _work_dir(settings, job_id)
+    return JobRecord(
         id=job_id,
         type=job_type,
         slot=slot,
@@ -77,10 +77,33 @@ async def generate_job(
         publish_at=publish_at,
         topic=topic.slug,
         status="GENERATING",
-        audio_id=None,
+        audio_id=audio_id,
         max_attempts=settings.max_attempts,
         timeline=[TimelineStep(label="Generate", sub="start", kind="neutral")],
     )
+
+
+async def generate_job(
+    job_type: JobType,
+    *,
+    settings: Settings | None = None,
+    date: str | None = None,
+    forced_topic: TopicSlug | None = None,
+    existing: JobRecord | None = None,
+) -> JobRecord:
+    settings = settings or get_settings()
+    job = existing or prepare_generate_job(
+        job_type, settings=settings, date=date, forced_topic=forced_topic
+    )
+    job_type = job.type
+    day = job.date
+    topic = pick_topic(job_type=job_type).model_copy()
+    topic.slug = job.topic
+    audience = performance_note(list_jobs(settings), day)
+    job_id = job.id
+    work_dir = _work_dir(settings, job_id)
+    job.status = "GENERATING"
+    save_job(job, settings)
     must_fix: str | None = None
     plan = await run_planner(
         settings,
@@ -101,6 +124,7 @@ async def generate_job(
     for attempt in range(1, settings.max_attempts + 1):
         job.attempt = attempt
         job.status = "GENERATING" if attempt == 1 else "REGENERATING"
+        save_job(job, settings)
         artifact = await run_creator(
             settings,
             job_id=job_id,
@@ -120,6 +144,7 @@ async def generate_job(
         if not artifact.still_path or not Path(artifact.still_path).is_file():
             raise StillError("Still was not written")
         job.status = "CRITIQUE"
+        save_job(job, settings)
         critique = await run_critic(
             settings,
             job_type=job_type,
