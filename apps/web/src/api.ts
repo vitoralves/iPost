@@ -1,4 +1,4 @@
-import type { AuthStatus, BrandKit, Job, JobPayload, StyleRef, Topic, Track } from "./types"
+import type { AuthStatus, BrandKit, Job, JobPayload, SchedulerRun, StyleRef, Topic, Track } from "./types"
 
 const base = import.meta.env.VITE_API_URL ?? "/api"
 
@@ -134,6 +134,11 @@ export function toJobPayload(job: Job): JobPayload {
 
 export function getAuthStatus() {
   return request<AuthStatus>("/auth/status")
+}
+
+export async function getRuns() {
+  const payload = await request<{ runs: SchedulerRun[] }>("/runs")
+  return payload.runs
 }
 
 export function getSession() {

@@ -1236,6 +1236,54 @@ textarea.field-box {
   margin-right: 10px;
 }
 
+.run-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.run-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.run-head time {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.run-meta {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.run-msg {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.run-row.error .run-msg {
+  color: #c45c4a;
+}
+
+.pill.ok {
+  background: #243226;
+  color: #8aa67a;
+}
+
+.pill.skipped {
+  background: #2a261c;
+  color: #c4a570;
+}
+
+.pill.error {
+  background: #32201c;
+  color: #c45c4a;
+}
+
 .ig-row {
   display: flex;
   justify-content: space-between;

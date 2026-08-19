@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
-import { getAuthStatus } from "../api"
-import type { AuthStatus } from "../types"
+import { Link } from "react-router-dom"
+import { getAuthStatus, getRuns } from "../api"
+import type { AuthStatus, SchedulerRun } from "../types"
 
 const schedule = [
   ["Story generation", "04:00"],
@@ -10,9 +11,26 @@ const schedule = [
   ["Reel publish", "19:00"],
 ]
 
+function formatWhen(iso: string) {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+}
+
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms} ms`
+  return `${(ms / 1000).toFixed(1)} s`
+}
+
+function formatUsd(value: number) {
+  return `US$ ${value.toFixed(4)}`
+}
+
 export function SettingsPage() {
   const [auth, setAuth] = useState<AuthStatus | null>(null)
+  const [runs, setRuns] = useState<SchedulerRun[]>([])
   const [status, setStatus] = useState("Loading…")
+  const [runsError, setRunsError] = useState("")
 
   useEffect(() => {
     getAuthStatus()
@@ -24,10 +42,22 @@ export function SettingsPage() {
         setAuth(null)
         setStatus(exc instanceof Error ? exc.message : "Could not load Instagram status")
       })
+    getRuns()
+      .then((next) => {
+        setRuns(next)
+        setRunsError("")
+      })
+      .catch((exc: unknown) => {
+        setRuns([])
+        setRunsError(exc instanceof Error ? exc.message : "Could not load worker runs")
+      })
   }, [])
 
   const days = auth?.days_until_expiry
   const reconnectHref = `${import.meta.env.VITE_API_URL ?? "/api"}/auth/instagram`
+  const lambdaCost = runs.reduce((sum, run) => sum + (run.estimated_cost_usd || 0), 0)
+  const failed = runs.filter((run) => run.status === "error").length
+  const skipped = runs.filter((run) => run.status === "skipped").length
 
   return (
     <div className="page">
@@ -80,8 +110,50 @@ export function SettingsPage() {
         </p>
       </section>
       <section className="settings-block">
-        <div className="field-label">Alerts log</div>
-        <p className="page-sub">No alerts yet.</p>
+        <div className="field-label">Worker runs</div>
+        <div className="kv">
+          <span>Lambda compute (this list)</span>
+          <span>{formatUsd(lambdaCost)}</span>
+        </div>
+        <div className="kv">
+          <span>Failed / skipped</span>
+          <span>
+            {failed} / {skipped}
+          </span>
+        </div>
+        <p className="page-sub">
+          This is Lambda GB-seconds only. gpt-image-2 and Bedrock Nova Pro show on the OpenAI and
+          AWS bills. Viewing those consoles is free. Email goes out on failures and when a clock
+          skips because a post is not ready.
+        </p>
+        {runsError ? <p className="page-sub">{runsError}</p> : null}
+        {runs.length === 0 && !runsError ? (
+          <p className="page-sub">No worker runs yet.</p>
+        ) : (
+          runs.map((run) => (
+            <article className={`run-row ${run.status}`} key={run.id}>
+              <div className="run-head">
+                <span className={`pill ${run.status}`}>
+                  {run.status} · {run.action}
+                  {run.job_type ? ` ${run.job_type}` : ""}
+                </span>
+                <time dateTime={run.created_at}>{formatWhen(run.created_at)}</time>
+              </div>
+              <p className="run-meta">
+                {formatDuration(run.duration_ms)}
+                {run.estimated_cost_usd ? ` · ${formatUsd(run.estimated_cost_usd)}` : ""}
+                {run.source === "api" ? " · dashboard" : " · clock"}
+                {run.job_id ? (
+                  <>
+                    {" · "}
+                    <Link to={`/jobs/${run.job_id}`}>{run.job_id}</Link>
+                  </>
+                ) : null}
+              </p>
+              {run.message ? <p className="run-msg">{run.message}</p> : null}
+            </article>
+          ))
+        )}
       </section>
     </div>
   )

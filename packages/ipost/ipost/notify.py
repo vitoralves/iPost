@@ -66,3 +66,19 @@ def notify_generate_failed(job: JobRecord | None, settings: Settings, error: str
         subject="iPost: generate failed",
         body=f"Job {job_id} failed during generate.\n\nError: {error}\n",
     )
+
+
+def notify_publish_skipped(settings: Settings, job_type: str, reason: str) -> None:
+    notify(
+        settings,
+        subject=f"iPost: {job_type} publish skipped",
+        body=f"{job_type} publish did not run.\n\n{reason}\n",
+    )
+
+
+def notify_scheduler_error(settings: Settings, action: str, error: str) -> None:
+    notify(
+        settings,
+        subject=f"iPost: {action} failed",
+        body=f"The {action} clock failed.\n\nError: {error}\n",
+    )

@@ -154,6 +154,14 @@ def test_brand_kit_feeds_prompts() -> None:
         save_brand_kit(original, settings)
 
 
+def test_lambda_cost() -> None:
+    from ipost.runs import estimate_lambda_cost_usd
+
+    cost = estimate_lambda_cost_usd(2048, 30_000)
+    _assert(0.0009 < cost < 0.002, str(cost))
+    print("lambda cost ok:", cost)
+
+
 def test_story_handler() -> None:
     result = lambda_handler({"action": "generate", "type": "STORY", "date": "2026-08-17"}, None)
     _assert(result["statusCode"] == 200, result.get("body", ""))
@@ -192,6 +200,7 @@ def main() -> None:
     test_topic_rotation()
     test_insight_weights()
     test_brand_kit_feeds_prompts()
+    test_lambda_cost()
     test_story_handler()
     test_reel_generate()
     print("=" * 60)

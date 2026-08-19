@@ -1,4 +1,5 @@
 import logging
+import time
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -39,6 +40,7 @@ from ipost.job_actions import (
 )
 from ipost.jobs import get_job, list_jobs, save_job
 from ipost.notify import notify_generate_failed, notify_needs_review
+from ipost.runs import list_runs, record_run
 from ipost.settings import Settings
 from ipost.storage import StorageError, download_private_bytes, upload_private_bytes
 from ipost.token_store import days_until_expiry, load_token, save_token
@@ -169,11 +171,32 @@ async def generate_route(body: GenerateBody, settings: Settings = Depends(settin
         job = save_job(job, settings)
     except ConfigError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    started = time.perf_counter()
     await _run_generate(job, settings)
     saved = get_job(job.id, settings) or job
-    if saved.status == "FAILED":
+    duration_ms = int((time.perf_counter() - started) * 1000)
+    failed = saved.status == "FAILED"
+    record_run(
+        action="generate",
+        status="error" if failed else "ok",
+        settings=settings,
+        source="api",
+        job_type=saved.type,
+        job_id=saved.id,
+        message=saved.must_fix or "",
+        duration_ms=duration_ms,
+    )
+    if failed:
         raise HTTPException(status_code=503, detail=saved.must_fix or "Generation failed")
     return saved.model_dump()
+
+
+@router.get("/runs")
+def list_runs_route(settings: Settings = Depends(settings_dep)) -> dict:
+    try:
+        return {"runs": [item.model_dump() for item in list_runs(settings)]}
+    except ConfigError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/jobs")

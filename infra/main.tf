@@ -175,6 +175,10 @@ resource "aws_scheduler_schedule" "story_generate" {
     arn      = aws_lambda_function.worker[0].arn
     role_arn = aws_iam_role.scheduler[0].arn
     input    = jsonencode({ action = "generate", type = "STORY" })
+
+    retry_policy {
+      maximum_retry_attempts = 0
+    }
   }
 }
 
@@ -194,6 +198,10 @@ resource "aws_scheduler_schedule" "story_publish" {
     arn      = aws_lambda_function.worker[0].arn
     role_arn = aws_iam_role.scheduler[0].arn
     input    = jsonencode({ action = "publish", type = "STORY" })
+
+    retry_policy {
+      maximum_retry_attempts = 0
+    }
   }
 }
 
@@ -231,6 +239,10 @@ resource "aws_scheduler_schedule" "reel_generate" {
     arn      = aws_lambda_function.worker[0].arn
     role_arn = aws_iam_role.scheduler[0].arn
     input    = jsonencode({ action = "generate", type = "REEL" })
+
+    retry_policy {
+      maximum_retry_attempts = 0
+    }
   }
 }
 
@@ -250,6 +262,10 @@ resource "aws_scheduler_schedule" "reel_publish" {
     arn      = aws_lambda_function.worker[0].arn
     role_arn = aws_iam_role.scheduler[0].arn
     input    = jsonencode({ action = "publish", type = "REEL" })
+
+    retry_policy {
+      maximum_retry_attempts = 0
+    }
   }
 }
 
@@ -287,6 +303,10 @@ resource "aws_scheduler_schedule" "insights_sync" {
     arn      = aws_lambda_function.worker[0].arn
     role_arn = aws_iam_role.scheduler[0].arn
     input    = jsonencode({ action = "insights" })
+
+    retry_policy {
+      maximum_retry_attempts = 0
+    }
   }
 }
 

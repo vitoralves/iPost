@@ -87,6 +87,21 @@ export type AlertItem = {
   message: string
 }
 
+export type SchedulerRun = {
+  id: string
+  action: string
+  status: "ok" | "skipped" | "error" | string
+  source: string
+  job_type: string | null
+  job_id: string | null
+  message: string
+  duration_ms: number
+  memory_mb: number
+  estimated_cost_usd: number
+  request_id: string | null
+  created_at: string
+}
+
 export type AuthStatus = {
   connected: boolean
   user_id?: string
